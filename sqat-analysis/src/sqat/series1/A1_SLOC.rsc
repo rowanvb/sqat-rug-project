@@ -89,6 +89,62 @@ int countEmptyLines(list[str] fileLines)
 	return n;
 }
 
+test bool singleLineCommentCountedAsComment()
+{
+	list[str] lines = ["// This is a comment"];
+	return countCommentLines(lines) == 1;
+}
+
+test bool multiLineCommentCountedAsComment()
+{
+	list[str] lines = [	"/* This",
+						"is",
+						"a",
+						"multiline",
+						"comment */"];
+	return countCommentLines(lines) == 5;
+}
+
+test bool multiCommentCountedAsComment()
+{
+	list[str] lines = [	"/* This is a multiline comment on one line */"];
+	return countCommentLines(lines) == 1;
+}
+
+test bool noneCommentLinesAreNotCounted()
+{
+	list[str] lines = [	"This is not a comment",
+						"/* This is a comment */",
+						"This is also not a comment"];
+	return countCommentLines(lines) == 1;
+}
+
+test bool countEmptyLines()
+{
+	list[str] lines = [""];
+	return countEmptyLines(lines) == 1;
+}
+
+test bool emptyLinesInCommentsNotCountedAsEmptyLine()
+{
+	list[str] lines = [	"/* This is the start of a comment",
+						"",
+						"The previous line was an empty line in a comment",
+						"This is the last line of a comment */"];
+	return countEmptyLines(lines) == 0;
+}
+
+test bool emptyLinesInCommentsCountedAsCommentLine()
+{
+	list[str] lines = [	"/* This is the start of a comment",
+						"",
+						"The previous line was an empty line in a comment",
+						"This is the last line of a comment */"];
+	return countCommentLines(lines) == 4;
+}
+
+
+
 test bool countCommentLines()
 {
 	loc testInput = |project://sqat-analysis/src/sqat/series1/SLOCTestInput.java|;
