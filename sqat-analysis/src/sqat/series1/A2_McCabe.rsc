@@ -62,12 +62,7 @@ int countStatements(Statement s){
 			n += countStatements(thenBranch);
 			n += countStatements(elseBranch);
 		}
-		case \switch(Expression expression, list[Statement] statements) : {
-			println("switch has " + size(statements).toString() + " statements");
-			for (s <- statements) {
-				n += countStatements(s);
-			}
-		}	
+
 		//case \case(Expression expression) : {
 		//	println(expression);
 		//}
@@ -89,5 +84,12 @@ CCDist ccDist(CC cc) {
   // to be done
 }
 
+test bool breakNotCounted(){
+	Statement s = \break();
+	return countStatements(s) == 1;
+}
 
-
+test bool nestedIfStatementsCounted(){
+	Statement s = \if(\booleanLiteral(true), \if(\booleanLiteral(true), \empty()));
+	return countStatements(s) == 3;
+}
