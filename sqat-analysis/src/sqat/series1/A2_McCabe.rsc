@@ -1,6 +1,9 @@
 module sqat::series1::A2_McCabe
 
 import lang::java::jdt::m3::AST;
+import ParseTree;
+import String;
+import util::FileSystem;
 import IO;
 
 /*
@@ -35,9 +38,42 @@ Bonus
 
 */
 
-set[Declaration] jpacmanASTs() = createAstsFromEclipseProject(|project://jpacman-framework|, true); 
+set[Declaration] jpacmanASTs() = createAstsFromEclipseProject(|project://jpacman|, true); 
 
 alias CC = rel[loc method, int cc];
+
+void main(){
+	set[Declaration] decs = jpacmanASTs();
+	visit(decs) {
+		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions) :
+			println(name);		
+		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :
+		{	print(name); print(" has "); println(countStatements(impl)); }
+	}
+}
+
+int countStatements(Statement s){
+	int n = 1;
+	visit(s) {
+		case \if(Expression condition, Statement thenBranch) : {
+			n += countStatements(thenBranch);
+		}
+		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : {
+			n += countStatements(thenBranch);
+			n += countStatements(elseBranch);
+		}
+		case \switch(Expression expression, list[Statement] statements) : {
+			println("switch has " + size(statements).toString() + " statements");
+			for (s <- statements) {
+				n += countStatements(s);
+			}
+		}	
+		//case \case(Expression expression) : {
+		//	println(expression);
+		//}
+	}
+	return n;
+}
 
 CC cc(set[Declaration] decls) {
   CC result = {};
