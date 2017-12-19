@@ -35,124 +35,130 @@ Bonus:
 */
 
 alias SLOC = map[loc file, int sloc];
-loc jpacman = |project://jpacman/|;
+loc jpacman = |project://jpacman-framework/|;
 
-SLOC sloc() {
+SLOC sloc(loc location) {
 	SLOC result = ();
 	int total = 0;
-	set[loc] files = files(jpacman);
-	for (loc l <- files)
+	set[loc] files = files(location);
+	for (loc file <- files)
 	{
-		if (/\.java/ := l.path) {
-			int cnt = countLinesOfCode(l);
-			result [l] = cnt;
-			total += cnt;
+		if (/\.java/ := file.path) {
+			int count = countLinesOfCodeInFile(file);
+			result [file] = count;
+			total += count;
 		}
 	}	
 	println(total);
   	return result;
 }       
 
-int countLinesOfCode(loc file)
+int countLinesOfCodeInFile(loc file)
 {
-	list[str] fileLines = readFileLines(file);
-	return size(fileLines) - (countNonSourcecodeLines(fileLines));
-}      
+	list[str] lines = readFileLines(file);
+	return countLinesOfCode(lines);
+}
 
-int countNonSourcecodeLines(list[str] file)
+int countLinesOfCode(list[str] lines){
+	return size(lines) - (countNonSourcecodeLines(lines));
+}
+
+int countNonSourcecodeLines(list[str] lines)
 {
-  	n = 0;
+  	numberOfLines = 0;
   	bool isOpened = false;
-  	for(str s <- file){
-  		if (isOpened)
-  			n+=1;
-  		else if (!isOpened && /\s*\/\*.*/ := s){
+  	for(str s <- lines){
+  		if (isOpened){
+  			numberOfLines+=1;
+  		}else if (!isOpened && /\s*\/\*.*/ := s){
   			isOpened = true;
-  			n+=1;
-		} else if (!isOpened && /^[\r\t\n]*$/ := s)
-			n += 1;
-		else if (/\/\// := s)
-			n+=1;
-		if (isOpened && /\*\// := s){
+  			numberOfLines+=1;
+		} else if (!isOpened && /^[\s]*$/ := s){
+			numberOfLines += 1;
+		} else if (/\/\// := s){
+			numberOfLines+=1;
+		} if (isOpened && /\*\// := s){
 			isOpened = false;
 		}
 	}
-  	return n;
+  	return numberOfLines;
 }
 
-int countEmptyLines(list[str] fileLines)
+test bool correctlyCountsNonSourceLinesOfCode()
 {
-	n = 0;
-	for (str s <- fileLines)
-	{
-		if (/^[\r\t\n]*$/ := s)
-			n += 1;
-	}
-	return n;
+	list[str] lines = [	"/* This method caclulates the greatest common divisor",
+						"*/",
+						"public int GCD(int a, int b) {",
+   					  	"if (b==0)",
+   					  	"	return a;",
+   					  	"//Recursively call the function",
+   						"return GCD(b,a%b);"];
+   	return countNonSourcecodeLines(lines) == 3;
 }
 
-test bool singleLineCommentCountedAsComment()
+test bool correctlyCountsSourceLinesOfCode()
+{
+	list[str] lines = [	"/* This method caclulates the greatest common divisor",
+						"*/",
+						"public int GCD(int a, int b) {",
+   					  	"if (b==0)",
+   					  	"	return a;",
+   					  	"//Recursively call the function",
+   						"return GCD(b,a%b);"];
+   	return countLinesOfCode(lines) == 4;
+}
+
+test bool singleLineCommentCountedAsNonSourceLines()
 {
 	list[str] lines = ["// This is a comment"];
-	return countCommentLines(lines) == 1;
+	return countNonSourcecodeLines(lines) == 1;
 }
 
-test bool multiLineCommentCountedAsComment()
+test bool multiLineCommentCountedAsNonSourceLines()
 {
 	list[str] lines = [	"/* This",
 						"is",
 						"a",
 						"multiline",
 						"comment */"];
-	return countCommentLines(lines) == 5;
+	return countNonSourcecodeLines(lines) == 5;
 }
 
-test bool multiCommentCountedAsComment()
+test bool multiCommentCountedAsNonSourceLinse()
 {
 	list[str] lines = [	"/* This is a multiline comment on one line */"];
-	return countCommentLines(lines) == 1;
+	return countNonSourcecodeLines(lines) == 1;
 }
 
-test bool noneCommentLinesAreNotCounted()
+test bool noneCommentLinesAreNotCountedAsNonSourceLines()
 {
 	list[str] lines = [	"This is not a comment",
 						"/* This is a comment */",
 						"This is also not a comment"];
-	return countCommentLines(lines) == 1;
+	return countNonSourcecodeLines(lines) == 1;
 }
 
-test bool countEmptyLines()
+test bool emptyLinesAreCountedAsNonSourceLines()
 {
 	list[str] lines = [""];
-	return countEmptyLines(lines) == 1;
+	return countNonSourcecodeLines(lines) == 1;
 }
 
-test bool emptyLinesInCommentsNotCountedAsEmptyLine()
+test bool linesOnlyContainingTabsAreNotCountedAsNonSourceLines(){
+	list[str] lines = ["				"];
+	return countNonSourcecodeLines(lines) == 1;
+}
+
+test bool linesOnlyContainingSpacesAreNotCountedAsNonSourceLines(){
+	list[str] lines = ["     "];
+	return countNonSourcecodeLines(lines) == 1;
+}
+
+test bool emptyLinesInCommentsAreOnlyCountedOnce()
 {
 	list[str] lines = [	"/* This is the start of a comment",
 						"",
 						"The previous line was an empty line in a comment",
 						"This is the last line of a comment */"];
-	return countEmptyLines(lines) == 0;
+	return countNonSourcecodeLines(lines) == 4;
 }
-
-test bool emptyLinesInCommentsCountedAsCommentLine()
-{
-	list[str] lines = [	"/* This is the start of a comment",
-						"",
-						"The previous line was an empty line in a comment",
-						"This is the last line of a comment */"];
-	return countCommentLines(lines) == 4;
-}
-
-test bool countCommentLines()
-{
-	loc testInput = |project://sqat-analysis/src/sqat/series1/SLOCTestInput.java|;
-	testList = readFileLines(testInput);
-	//list[str] testList = ["/* xx ", "this is a comment", "this is another line", "this is a closing line */"];
-	println(countCommentLines(testList));
-	return countCommentLines(testList) == 12;	
-}
-		
-
-             
