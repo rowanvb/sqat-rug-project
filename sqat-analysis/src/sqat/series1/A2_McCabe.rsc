@@ -44,6 +44,7 @@ alias CC = rel[loc method, int cc];
 
 void main(){
 	set[Declaration] decs = jpacmanASTs();
+	CC cc = {};
 	visit(decs) {
 		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions) :
 			println(name);		
@@ -53,25 +54,26 @@ void main(){
 }
 
 int countStatements(Statement s){
-	int n = 1;
+	int n = 0;
 	visit(s) {
-		case \if(Expression condition, Statement thenBranch) : {
-			n += countStatements(thenBranch);
-		}
+		case \if(Expression condition, Statement thenBranch) :
+		{ n += 1 + countStatements(thenBranch); println("if without condition");}
 		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : {
-			n += countStatements(thenBranch);
+			n += 1 + countStatements(thenBranch);
 			n += countStatements(elseBranch);
-		}
-		case \switch(Expression expression, list[Statement] statements) : {
-			println("switch has " + size(statements).toString() + " statements");
-			for (s <- statements) {
-				n += countStatements(s);
-			}
+			println("if with condition");
 		}	
-		//case \case(Expression expression) : {
-		//	println(expression);
-		//}
+		case \case(Expression expression) : n += 1; 
+		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : n += 1 + countStatements(body);
+    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : n += 1 + countStatements(body);
+    	case \while(Expression condition, Statement body) : n += 1 + countStatements(body);
+    	case \do(Statement body, Expression condition) : n += 1 + countStatements(body);
+    	case \break() : n += 1;
+    	case \break(str label) : n += 1;
+    	case \continue() : n += 1;
+    	case \continue(str label) : n += 1;    	
 	}
+	// returned 1 als ie niets matched?..
 	return n;
 }
 
