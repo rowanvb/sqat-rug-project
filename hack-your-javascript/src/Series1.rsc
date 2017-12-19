@@ -38,7 +38,7 @@ test bool testDebug()
 /*
  * 1. At fields
  */ 
-Expression desugar((Expression)`@<Id x>`) = /* you should replace this */ dummyExp();
+Expression desugar((Expression)`@<Id x>`) = (Expression) `this.<Id x>`;
 
 test bool testAtField() 
   = desugar((Expression)`@name`) 
@@ -49,10 +49,10 @@ test bool testAtField()
  * 2. Twitter search expressions
  */
 Expression desugar((Expression)`@(<{Expression ","}* es>)`) 
-  = /* you should replace this */ dummyExp();
+  = (Expression) `searchAt(<{Expression ","}* es>)`;
 
 Expression desugar((Expression)`#(<{Expression ","}* es>)`)
-  = /* you should replace this */ dummyExp();  
+  = (Expression) `searchHash(<{Expression ","}* es>)`;
 
 test bool testTwitter()
   = desugar((Expression)`@("obama")`) 
@@ -62,7 +62,7 @@ test bool testTwitter()
  * 3. Don't statement
  */
 
-Statement desugar((Statement)`dont <Statement _>`) = /* you should replace this */ dummyStat();
+Statement desugar((Statement)`dont <Statement _>`) = (Statement) `;`;
 
 test bool testDont()
   = desugar((Statement)`dont if (x == 3) print(x);`) 
@@ -110,7 +110,8 @@ test bool testRepeat()
 
 Statement desugar((Statement)`assert <Expression e>: <String msg>;`) {
   // don't forget to convert the expression to a string!
-  return /* you should replace this */ dummyStat();
+  return (Statement)`if(!(<Expression e>))
+  					'  throw Assertion " + jsString(<Expression e>) + " failed: " + <String msg>;`;
 }
 
 

@@ -4,7 +4,6 @@ import IO;
 import ParseTree;
 import String;
 import util::FileSystem;
-import sqat::series1::Comments;
 
 /* 
 
@@ -36,10 +35,68 @@ Bonus:
 */
 
 alias SLOC = map[loc file, int sloc];
+loc jpacman = |project://jpacman/|;
 
-SLOC sloc(loc project) {
-  SLOC result = ();
-  // implement here
-  return result;
-}             
+SLOC sloc() {
+	SLOC result = ();
+	int total = 0;
+	set[loc] files = files(jpacman);
+	for (loc l <- files)
+	{
+		if (/\.java/ := l.path) {
+			int cnt = countLinesOfCode(l);
+			result [l] = cnt;
+			total += cnt;
+		}
+	}	
+	println(total);
+  	return result;
+}       
+
+int countLinesOfCode(loc file)
+{
+	list[str] fileLines = readFileLines(file);
+	return size(fileLines) - (countCommentLines(fileLines) + countEmptyLines(fileLines));
+}      
+
+int countCommentLines(list[str] file)
+{
+  	n = 0;
+  	bool isOpened = false;
+  	for(str s <- file){
+  		if (isOpened)
+  			n+=1;
+  		else if (!isOpened && /\s*\/\*.*/ := s){
+  			isOpened = true;
+  			n+=1;
+		} else if (/\/\// := s)
+			n+=1;
+		if (isOpened && /\*\// := s){
+			isOpened = false;
+		}
+	}
+  	return n;
+}
+
+int countEmptyLines(list[str] fileLines)
+{
+	n = 0;
+	for (str s <- fileLines)
+	{
+		if (/^[\r\t\n]*$/ := s)
+			n += 1;
+	}
+	return n;
+}
+
+test bool countCommentLines()
+{
+	loc testInput = |project://sqat-analysis/src/sqat/series1/SLOCTestInput.java|;
+	testList = readFileLines(testInput);
+	//list[str] testList = ["/* xx ", "this is a comment", "this is another line", "this is a closing line */"];
+	println(countCommentLines(testList));
+	return countCommentLines(testList) == 12;	
+}
+		
+
              
