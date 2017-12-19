@@ -56,10 +56,10 @@ SLOC sloc() {
 int countLinesOfCode(loc file)
 {
 	list[str] fileLines = readFileLines(file);
-	return size(fileLines) - (countCommentLines(fileLines) + countEmptyLines(fileLines));
+	return size(fileLines) - (countNonSourcecodeLines(fileLines));
 }      
 
-int countCommentLines(list[str] file)
+int countNonSourcecodeLines(list[str] file)
 {
   	n = 0;
   	bool isOpened = false;
@@ -69,7 +69,9 @@ int countCommentLines(list[str] file)
   		else if (!isOpened && /\s*\/\*.*/ := s){
   			isOpened = true;
   			n+=1;
-		} else if (/\/\// := s)
+		} else if (!isOpened && /^[\r\t\n]*$/ := s)
+			n += 1;
+		else if (/\/\// := s)
 			n+=1;
 		if (isOpened && /\*\// := s){
 			isOpened = false;
@@ -142,8 +144,6 @@ test bool emptyLinesInCommentsCountedAsCommentLine()
 						"This is the last line of a comment */"];
 	return countCommentLines(lines) == 4;
 }
-
-
 
 test bool countCommentLines()
 {
