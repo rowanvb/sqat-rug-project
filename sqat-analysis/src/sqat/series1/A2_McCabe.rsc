@@ -44,6 +44,7 @@ alias CC = rel[loc method, int cc];
 
 void main(){
 	set[Declaration] decs = jpacmanASTs();
+	CC cc = {};
 	visit(decs) {
 		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions) :
 			println(name);		
