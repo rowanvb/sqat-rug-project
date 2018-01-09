@@ -54,21 +54,19 @@ void main(){
 
 int countStatements(Statement s){
 	int n = 1;
-	visit(s) {
-		case \if(Expression condition, Statement thenBranch) : n += 1 + countStatements(thenBranch);
-		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : {
-			n += 1 + countStatements(thenBranch);
-			n += countStatements(elseBranch);
-		}	
+	top-down visit(s) {
+		case \if(Expression condition, Statement thenBranch) : n += 1;
+		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : n += 1;
 		case \case(Expression expression) : n += 1; 
-		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : n += 1 + countStatements(body);
-	    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : n += 1 + countStatements(body);
-	    	case \while(Expression condition, Statement body) : n += 1 + countStatements(body);
-	    	case \do(Statement body, Expression condition) : n += 1 + countStatements(body);
-	    	case \break() : n += 1;
+		case \defaultCase() : n += 1; 
+		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : n += 1;
+	    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : n += 1;
+	    	case \while(Expression condition, Statement body) : n += 1;
+	    	case \do(Statement body, Expression condition) : n += 1;
+	    /*	case \break() : n += 1;
 	    	case \break(str label) : n += 1;
 	    	case \continue() : n += 1;
-	    	case \continue(str label) : n += 1;    	
+	    	case \continue(str label) : n += 1;  */  	
 	}
 	// returned 1 als ie niets matched?..
 	return n;
@@ -88,17 +86,163 @@ CCDist ccDist(CC cc) {
   // to be done
 }
 
+
+// =================== NOT COUNTED TESTS ======================
+/*
+while(true){		+1
+	if(true) {	+1
+		break;
+	}
+}
+*/
 test bool breakNotCounted(){
-	Statement s = \break();
-	return countStatements(s) == 1;
-}
-
-test bool nestedIfStatementsCounted(){
-	Statement s = \if(\booleanLiteral(true), \if(\booleanLiteral(true), \empty()));
+	Statement s = \while(\booleanLiteral(true), \if(\booleanLiteral(true), \break()));
 	return countStatements(s) == 3;
 }
 
-test bool consecutiveIfStatementsCounted(){
-	Statement s = \block([\if(\booleanLiteral(true), \empty()),\if(\booleanLiteral(true), \empty())]);
+/*
+while(true){		+1
+	if(true) {	+1
+		continue;
+	}
+}
+*/
+test bool continueNotCounted(){
+	Statement s = \while(\booleanLiteral(true), \if(\booleanLiteral(true), \continue()));
 	return countStatements(s) == 3;
+}
+
+/*
+while(true){		+1
+	if(true) {	+1
+		return;
+	}
+}
+*/
+test bool returnNotCounted(){
+	Statement s = \while(\booleanLiteral(true), \if(\booleanLiteral(true), \return()));
+	return countStatements(s) == 3;
+}
+
+/*
+if(true) { +1
+	//BLANK
+} else {
+	//BLANK
+}
+*/
+test bool ElseNotCounted(){
+	Statement s = \if(\booleanLiteral(true), \empty(), \empty());
+	return countStatements(s) == 2;
+}
+
+// =================== COUNTED TESTS ======================
+
+/*
+if(true){	+1
+	//BLANK
+}
+*/
+test bool IfCounted(){
+	Statement s = \if(\booleanLiteral(true), \empty());
+	return countStatements(s) == 2;
+}
+
+/*
+if(true){	+1
+	//BLANK
+} else {		
+	//BLANK
+}
+*/
+test bool IfWithElseCounted(){
+	Statement s = \if(\booleanLiteral(true), \empty(), \empty());
+	return countStatements(s) == 2;
+}
+
+/*
+switch(x){
+	case 1: //BLANK		+1
+	case 2: //BLANK		+1
+	case 3: //BLANK		+1
+}
+*/
+test bool casesInSwitchCounted(){
+	Statement s = \switch(\simpleName("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3"))]);
+	return countStatements(s) == 4;
+}
+
+/*
+switch(x){
+	case 1: //BLANK		+1
+	case 2: //BLANK		+1
+	case 3: //BLANK		+1
+	default : //BLANK	+1
+}
+*/
+test bool defaultCaseInSwitchCounted(){
+	Statement s = \switch(\number("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3")), \defaultCase()]);
+	return countStatements(s) == 5;
+}
+
+
+
+// =================== SPECIAL CASE TESTS ======================
+
+/*
+if(true){			+1
+	//BLANK
+} else {				
+	if(true){		+1
+		// BLANK
+	}				
+}
+
+if(true){			+1
+	//BLANK
+} else if (true) {	+1
+	//BLANK
+}
+*/
+test bool If_ElseIf(){
+	Statement s = \if(\booleanLiteral(true), \empty(), \if(\booleanLiteral(true), \empty()));
+	return countStatements(s) == 3;
+}
+
+/*
+if(true){			+1
+	//BLANK
+} else { 
+	if(true){		+1
+		// BLANK
+	} else {	
+		// BLANK
+	}
+}
+
+if(true){			+1
+	//BLANK
+} else if (true) {	+1
+	//BLANK
+} else {	
+	//BLANK
+}
+*/
+test bool If_ElseIf_Else(){
+	Statement s = \if(\booleanLiteral(true), \empty(), \if(\booleanLiteral(true), \empty(), \empty()));
+	return countStatements(s) == 3;
+}
+
+/*
+switch(x){
+	case 1 : if(true) { 		+1 	+1
+				//BLANK 
+			}
+	default: //BLANK 		+1
+				
+}
+*/
+test bool IfInCase(){
+	Statement s = \switch(\simpleName("x"), [\case(\number("1")), \if(\booleanLiteral(true), \empty()), \defaultCase()]);
+	return countStatements(s) == 4;
 }
