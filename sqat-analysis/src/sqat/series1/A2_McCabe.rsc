@@ -42,49 +42,69 @@ set[Declaration] jpacmanASTs() = createAstsFromEclipseProject(|project://jpacman
 
 alias CC = rel[loc method, int cc];
 
-void main(){
+CC main(){
 	set[Declaration] decs = jpacmanASTs();
 	CC cc = {};
-	visit(decs) {
-		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions) :
-			println(name);		
-		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :
-		{	print(name); print(" has "); println(countStatements(impl)); }
+
+	top-down visit(decs) {
+		case s:\method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :	cc[s.src] = countStatements(impl);
 	}
+	return cc;
 }
 
 int countStatements(Statement s){
 	int n = 1;
 	top-down visit(s) {
-		case \if(Expression condition, Statement thenBranch) : n += 1;
-		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : n += 1;
-		case \case(Expression expression) : n += 1; 
+		case \if(Expression condition, Statement thenBranch) : n += 1 + countExpression(condition);
+		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : n += 1 + countExpression(condition);
+		case \case(Expression expression) : n += 1 + countExpression(expression); 
 		case \defaultCase() : n += 1; 
 		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : n += 1;
-	    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : n += 1;
-	    	case \while(Expression condition, Statement body) : n += 1;
-	    	case \do(Statement body, Expression condition) : n += 1;
-	    /*	case \break() : n += 1;
-	    	case \break(str label) : n += 1;
-	    	case \continue() : n += 1;
-	    	case \continue(str label) : n += 1;  */  	
+    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : n += 1;
+		case \infix(Expression lhs, str operator, Expression rhs) : println("whoo");
+    	case \while(Expression condition, Statement body) : n += 1;
+    	case \do(Statement body, Expression condition) : n += 1;
 	}
 	// returned 1 als ie niets matched?..
 	return n;
 }
 
+int countExpressions(list[Expression] e) {
+	return (0 | it + countExpression(e) | e <- initializers );
+}
+
+int countExpression(Expression e){
+	int n = 0;
+	top-down visit(e) {
+		case \infix(Expression lhs, str operator, Expression rhs) : {
+			println("assignment!");
+			if (operator == "||" || operator == "&&"){
+				n += 1;
+			}
+		}
+	}
+	return n;
+}
+
 CC cc(set[Declaration] decls) {
-  CC result = {};
-  
-  // to be done
-  
-  return result;
+	CC cc = {};
+
+	top-down visit(decls) {
+		case s:\method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :	cc[s.src] = countStatements(impl);
+	}
+	return cc;
 }
 
 alias CCDist = map[int cc, int freq];
 
 CCDist ccDist(CC cc) {
-  // to be done
+  	CCDist result = {};
+  	println(cc);
+  	for (cc_id <- cc){
+  		int count = cc[cc_id];
+  		result[count] += 1;
+	}
+  	return result;
 }
 
 

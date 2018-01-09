@@ -35,7 +35,7 @@ Bonus:
 */
 
 alias SLOC = map[loc file, int sloc];
-loc jpacman = |project://jpacman-framework/|;
+loc jpacman = |project://jpacman/|;
 
 SLOC sloc(loc location) {
 	SLOC result = ();
