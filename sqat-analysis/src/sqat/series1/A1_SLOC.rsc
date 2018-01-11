@@ -55,6 +55,39 @@ SLOC sloc(loc location) {
   	return result;
 }
 
+int countLinesOfCodeInFile(loc file)
+{
+	list[str] lines = readFileLines(file);
+	return countLinesOfCode(lines);
+}
+
+int countLinesOfCode(list[str] lines){
+	return size(lines) - (countNonSourcecodeLines(lines));
+}
+
+/// EXERCISES
+
+int countNonSourcecodeLines(list[str] lines)
+{
+  	numberOfLines = 0;
+  	bool isOpened = false;
+  	for(str s <- lines){
+  		if (isOpened){
+  			numberOfLines+=1;
+  		}else if (!isOpened && /\s*\/\*.*/ := s){
+  			isOpened = true;
+  			numberOfLines+=1;
+		} else if (!isOpened && /^[\s]*$/ := s){
+			numberOfLines += 1;
+		} else if (/\/\// := s){
+			numberOfLines+=1;
+		} if (isOpened && /\*\// := s){
+			isOpened = false;
+		}
+	}
+  	return numberOfLines;
+}
+
 int countTotalSize(loc location){
 	SLOC sloc = sloc(location);
 	return (0 | it + sloc[l] | loc l <- sloc);
@@ -82,36 +115,7 @@ void compareLocationSizes(loc loc1, loc loc2){
 	println("<loc1> <(1-percentage)*100>%");	
 }
 
-int countLinesOfCodeInFile(loc file)
-{
-	list[str] lines = readFileLines(file);
-	return countLinesOfCode(lines);
-}
-
-int countLinesOfCode(list[str] lines){
-	return size(lines) - (countNonSourcecodeLines(lines));
-}
-
-int countNonSourcecodeLines(list[str] lines)
-{
-  	numberOfLines = 0;
-  	bool isOpened = false;
-  	for(str s <- lines){
-  		if (isOpened){
-  			numberOfLines+=1;
-  		}else if (!isOpened && /\s*\/\*.*/ := s){
-  			isOpened = true;
-  			numberOfLines+=1;
-		} else if (!isOpened && /^[\s]*$/ := s){
-			numberOfLines += 1;
-		} else if (/\/\// := s){
-			numberOfLines+=1;
-		} if (isOpened && /\*\// := s){
-			isOpened = false;
-		}
-	}
-  	return numberOfLines;
-}
+/// ============ TESTS ===============
 
 test bool correctlyCountsNonSourceLinesOfCode()
 {

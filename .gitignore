@@ -1,2 +1,4 @@
 sqat-analysis/bin
-/.metadata/
+/.metadata
+*/.DS_Store
+.DS_Store

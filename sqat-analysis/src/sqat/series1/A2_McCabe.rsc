@@ -1,6 +1,7 @@
 module sqat::series1::A2_McCabe
 
 import lang::java::jdt::m3::AST;
+import sqat::series1::A1_SLOC;
 import ParseTree;
 import String;
 import util::FileSystem;
@@ -38,232 +39,317 @@ Bonus
 
 */
 
-set[Declaration] jpacmanASTs() = createAstsFromEclipseProject(|project://jpacman|, true); 
+alias CycComp = rel[loc method, int complexity];					// When a map is used only string representation of location is stored
+alias CycCompDistribution = map[int complexity, int frequency];
 
-alias CC = rel[loc method, int cc];
-
-CC main(){
-	set[Declaration] decs = jpacmanASTs();
-	CC cc = {};
-
-	top-down visit(decs) {
-		case s:\method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :	cc[s.src] = countStatements(impl);
+CycComp McCabe(loc location){
+	bool collectBindings = false;	//Exact naming or types of expressions not needed 
+	set[Declaration] declarations = createAstsFromEclipseProject(location, collectBindings); 
+	
+	CycComp complexity ={};
+	
+	top-down visit(declarations)	{
+		case statement : \method(Type \return, str n, list[Declaration] p, list[Expression] e, Statement impl) : complexity[statement.src] = computeMethodComplexity(impl);
 	}
-	return cc;
+	
+	return complexity;
 }
 
-int countStatements(Statement s){
-	int n = 1;
-	top-down visit(s) {
-		case \if(Expression condition, Statement thenBranch) : n += 1 + countExpression(condition);
-		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : n += 1 + countExpression(condition);
-		case \case(Expression expression) : n += 1 + countExpression(expression); 
-		case \defaultCase() : n += 1; 
-		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : n += 1;
-    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : n += 1;
-		case \infix(Expression lhs, str operator, Expression rhs) : println("whoo");
-    	case \while(Expression condition, Statement body) : n += 1;
-    	case \do(Statement body, Expression condition) : n += 1;
+CycCompDistribution McCabeDistribution(CycComp complexities) {
+  	CycCompDistribution distribution = ();
+  	for (complexity <- complexities){
+  		int count = complexity.complexity;
+  		if (count notin distribution){
+  			distribution[count] = 0;
+  		}
+  		distribution[count] += 1;
 	}
-	// returned 1 als ie niets matched?..
-	return n;
+  	return distribution;
 }
 
-int countExpressions(list[Expression] e) {
-	return (0 | it + countExpression(e) | e <- initializers );
-}
-
-int countExpression(Expression e){
-	int n = 0;
-	top-down visit(e) {
+int computeMethodComplexity(Statement method){
+	int complexity = 1;
+	top-down visit(method) {
+		case \if(Expression condition, Statement thenBranch) : complexity += 1;
+		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : complexity += 1;
+		case \case(Expression expression) : complexity += 1;
+		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : complexity += 1;
+	    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : complexity += 1;
+	    	case \foreach(Declaration parameter, Expression collection, Statement body) : complexity += 1;
+	    	case \while(Expression condition, Statement body) : complexity += 1;
 		case \infix(Expression lhs, str operator, Expression rhs) : {
-			println("assignment!");
-			if (operator == "||" || operator == "&&"){
-				n += 1;
-			}
+			if( operator == "||" || operator == "&&")
+				complexity += 1;
 		}
 	}
-	return n;
+	return complexity;
 }
 
-CC cc(set[Declaration] decls) {
-	CC cc = {};
-
-	top-down visit(decls) {
-		case s:\method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :	cc[s.src] = countStatements(impl);
+// EXERCISE QUESTIONS
+set[loc] highestComplexityMethods(loc location){
+	CycComp complexities = McCabe(location);
+	set[loc] locations = {};
+	int maxComplexity = 0;
+	for(complexity <- complexities){
+		int complexityScore = complexity.complexity;
+  		if(complexityScore > maxComplexity){
+  			locations = {complexity.method};
+  			maxComplexity = complexityScore;
+  		} else if(complexityScore == maxComplexity) {
+  			locations = locations + complexity.method;
+  		}
 	}
-	return cc;
+	return locations;
 }
 
-alias CCDist = map[int cc, int freq];
+map[str level,  real percentage] percentagesOfRiskLevel(loc location){
+	CycComp complexities = McCabe(location);
 
-CCDist ccDist(CC cc) {
-  	CCDist result = {};
-  	println(cc);
-  	for (cc_id <- cc){
-  		int count = cc[cc_id];
-  		result[count] += 1;
+	map[str level, real percentage] percentages = ("very high" : 0.0, "high" : 0.0, "moderate" : 0.0 , "low" : 0.0);
+	real total = 0.0;
+	for(complexity <- complexities){
+		int complexityScore = complexity.complexity;
+		SLOC s = sloc(complexity.method);
+		int lines = getOneFrom( [*s.sloc]);
+		if(complexityScore < 11) {
+			percentages["low"] += lines;
+		} else if(complexityScore < 21) {
+			percentages["moderate"] += lines ;
+		} else if(complexityScore < 51) {
+			percentages["high"] += lines ;
+		} else {
+			percentages["very high"] += lines;
+		}
+		total += lines;
 	}
-  	return result;
-}
-
-
-// =================== NOT COUNTED TESTS ======================
-/*
-while(true){		+1
-	if(true) {	+1
-		break;
+	for(level <- percentages){
+		percentages[level] = (percentages[level] / total) * 100;
 	}
-}
-*/
-test bool breakNotCounted(){
-	Statement s = \while(\booleanLiteral(true), \if(\booleanLiteral(true), \break()));
-	return countStatements(s) == 3;
-}
+	
+	return percentages;
+} 
 
-/*
-while(true){		+1
-	if(true) {	+1
-		continue;
-	}
-}
-*/
-test bool continueNotCounted(){
-	Statement s = \while(\booleanLiteral(true), \if(\booleanLiteral(true), \continue()));
-	return countStatements(s) == 3;
-}
 
 /*
-while(true){		+1
-	if(true) {	+1
-		return;
+* The function below is used in the testing methods to translate the body of a method into a statement
+*/
+Statement translateIntoStatement(str body){
+	loc l = |project://sqat-analysis/src/sqat/series1/test.java|;		//Required, but not used
+	str s = 	"public class test {
+			'	public void testMethod() {
+			'		<body>
+			'	}
+			'}";
+	Declaration d = createAstFromString(l, s, true);
+	top-down-break visit(d){
+		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) : return impl;
 	}
-}
-*/
-test bool returnNotCounted(){
-	Statement s = \while(\booleanLiteral(true), \if(\booleanLiteral(true), \return()));
-	return countStatements(s) == 3;
-}
-
-/*
-if(true) { +1
-	//BLANK
-} else {
-	//BLANK
-}
-*/
-test bool ElseNotCounted(){
-	Statement s = \if(\booleanLiteral(true), \empty(), \empty());
-	return countStatements(s) == 2;
+	return \null() ;
 }
 
 // =================== COUNTED TESTS ======================
-
-/*
-if(true){	+1
-	//BLANK
-}
-*/
-test bool IfCounted(){
-	Statement s = \if(\booleanLiteral(true), \empty());
-	return countStatements(s) == 2;
+test bool ifCounted(){
+	str body = 	"if(true) {		//	+1
+				' 	int x = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 2;
 }
 
-/*
-if(true){	+1
-	//BLANK
-} else {		
-	//BLANK
-}
-*/
-test bool IfWithElseCounted(){
-	Statement s = \if(\booleanLiteral(true), \empty(), \empty());
-	return countStatements(s) == 2;
+test bool ifWithElseCounted(){
+	str body = 	"if(true) {		//	+1
+				' 	int x = 0;
+				'} else { 
+				'	int y = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 2;
 }
 
-/*
-switch(x){
-	case 1: //BLANK		+1
-	case 2: //BLANK		+1
-	case 3: //BLANK		+1
-}
-*/
 test bool casesInSwitchCounted(){
-	Statement s = \switch(\simpleName("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3"))]);
-	return countStatements(s) == 4;
+	str body = 	"int x = 0;
+				'int y;
+				'switch(x){
+				'	case 0 : y = 0;		// +1
+				'	case 1 : y = 1;		// +1
+				'	case 2 : y = 2;		// +1
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 4;
 }
 
-/*
-switch(x){
-	case 1: //BLANK		+1
-	case 2: //BLANK		+1
-	case 3: //BLANK		+1
-	default : //BLANK	+1
-}
-*/
-test bool defaultCaseInSwitchCounted(){
-	Statement s = \switch(\number("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3")), \defaultCase()]);
-	return countStatements(s) == 5;
+test bool forLoopCounted(){
+	str body = 	"for( int i = 0 ; i \< 10 ; i++) {	// +1
+				'	int x = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 2;
 }
 
+test bool forLoopWithoutConditionCounted(){
+	str body = 	"for( int i = 0 ; ; i++) {	// +1
+				'	int y = 0;
+				' 	break;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 2;
+}
 
+test bool foreachCounted(){
+	str body = 	"List\<String\> someList = new ArrayList\<String\>();
+				'for (String item : someList) {			//+1
+		    		'	int y = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 2;
+}
+
+test bool whileCounted(){
+	str body = 	"while(true) {			//+1
+		    		'	int y = 0;
+				'}";	
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 2;
+}
+
+test bool booleanAndCounted(){
+	str body = 	"bool z = false && false;		//+1
+		    		'bool z = false && true;			//+1
+		    		'bool z = true && false;			//+1
+				'bool z = true && true;			//+1";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 5;
+}
+
+test bool booleanOrCounted(){
+	str body = 	"bool z = false || false;		//+1
+		    		'bool z = false || true;			//+1
+		    		'bool z = true || false;			//+1
+				'bool z = true || true;			//+1";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 5;
+}
 
 // =================== SPECIAL CASE TESTS ======================
 
-/*
-if(true){			+1
-	//BLANK
-} else {				
-	if(true){		+1
-		// BLANK
-	}				
+test bool booleanCumutativeCounted(){
+	str body = 	"bool z = false || true && false; ";		//+1 +1
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 3;
 }
 
-if(true){			+1
-	//BLANK
-} else if (true) {	+1
-	//BLANK
+test bool breakNotCounted(){
+	str body = 	"while(true){		//	+1
+				'	if(true) {		//	+1
+				'		break;
+				'	}
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 3;
 }
-*/
+
+test bool continueNotCounted(){
+	str body = 	"while(true){		//	+1
+				'	if(true) {		//	+1
+				'		continue;
+				'	}
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 3;
+}
+
+test bool returnNotCounted(){
+	str body = 	"while(true){		//	+1
+				'	if(true) {		//	+1
+				'		return;
+				'	}
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 3;
+}
+
+test bool elseNotCounted(){
+	str body = 	"if(true) {		//	+1
+				' 	int x = 0;
+				'} else {
+				'	int y = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 2;
+}
+
+test bool doWhileNotCounted(){
+	str body = 	"do {
+				'	int x = 0;
+				'} while(true);";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 1;
+}
+
+test bool defaultCaseInSwitchNotCounted(){
+	str body = 	"int x = 0;
+				'int y;
+				'switch(x){
+				'	case 0 : y = 0;		// +1
+				'	case 1 : y = 1;		// +1
+				'	case 2 : y = 2;		// +1
+				'	default : y = 3;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 4;
+}
+
 test bool If_ElseIf(){
-	Statement s = \if(\booleanLiteral(true), \empty(), \if(\booleanLiteral(true), \empty()));
-	return countStatements(s) == 3;
+	str ifInElseBody = 	"if(true) {				// +1
+						'	int x = 0;
+						'} else{
+						'	if(true){			//+1
+						'		int y =1;
+						'	}
+						'}";
+	Statement ifInElse = translateIntoStatement(ifInElseBody);
+	str elseIfBody = 	"if(true) {				// +1
+						'	int x = 0;
+						'} else if(true){		//+1
+						'	int y =1;
+						'}";
+	Statement elseIf = translateIntoStatement(elseIfBody);
+	return computeMethodComplexity(ifInElse) == computeMethodComplexity(elseIf);
 }
 
-/*
-if(true){			+1
-	//BLANK
-} else { 
-	if(true){		+1
-		// BLANK
-	} else {	
-		// BLANK
-	}
-}
-
-if(true){			+1
-	//BLANK
-} else if (true) {	+1
-	//BLANK
-} else {	
-	//BLANK
-}
-*/
 test bool If_ElseIf_Else(){
-	Statement s = \if(\booleanLiteral(true), \empty(), \if(\booleanLiteral(true), \empty(), \empty()));
-	return countStatements(s) == 3;
+	str ifInElseBody = 	"if(true) {				// +1
+						'	int x = 0;
+						'} else{
+						'	if(true){			//+1
+						'		int y = 1;
+						'	} else {
+						'		int z = 1;	
+						'	}
+						'}";
+	Statement ifInElse = translateIntoStatement(ifInElseBody);
+	str elseIfBody = 	"if(true) {				// +1
+						'	int x = 0;
+						'} else if(true){		//+1
+						'	int y = 1;
+						'} else {
+						'	int z = 1;
+						'}";
+	Statement elseIf = translateIntoStatement(elseIfBody);
+	return computeMethodComplexity(ifInElse) == computeMethodComplexity(elseIf);
 }
 
-/*
-switch(x){
-	case 1 : if(true) { 		+1 	+1
-				//BLANK 
-			}
-	default: //BLANK 		+1
-				
-}
-*/
 test bool IfInCase(){
-	Statement s = \switch(\simpleName("x"), [\case(\number("1")), \if(\booleanLiteral(true), \empty()), \defaultCase()]);
-	return countStatements(s) == 4;
+	str body = 	"int x = 0;
+				'int y;
+				'switch(x){
+				'	case 0 : { 			// +1
+				'		if(true){		// +1
+				'			y = 3;
+				'		}
+				'	}
+				'	default : y = 3;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 3;
 }
