@@ -42,15 +42,14 @@ set[Declaration] jpacmanASTs() = createAstsFromEclipseProject(|project://jpacman
 
 alias CC = rel[loc method, int cc];
 
-void main(){
+CC main(){
 	set[Declaration] decs = jpacmanASTs();
 	CC cc = {};
-	visit(decs) {
-		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions) :
-			println(name);		
-		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :
-		{	print(name); print(" has "); println(countStatements(impl)); }
+
+	top-down visit(decs) {
+		case s:\method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :	cc[s.src] = countStatements(impl);
 	}
+	return cc;
 }
 
 int countStatements(Statement s){
@@ -58,212 +57,281 @@ int countStatements(Statement s){
 	top-down visit(s) {
 		case \if(Expression condition, Statement thenBranch) : n += 1;
 		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : n += 1;
-		case \case(Expression expression) : n += 1; 
-		case \defaultCase() : n += 1; 
+		case \case(Expression expression) : n += 1;
+		//case \defaultCase() : n += 1; 
 		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : n += 1;
 	    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : n += 1;
+	    	case \foreach(Declaration parameter, Expression collection, Statement body) : n += 1;
 	    	case \while(Expression condition, Statement body) : n += 1;
-	    	case \do(Statement body, Expression condition) : n += 1;
-	    	case Expression : println("Expression");
-	    /*	case \break() : n += 1;
-	    	case \break(str label) : n += 1;
-	    	case \continue() : n += 1;
-	    	case \continue(str label) : n += 1;  */  	
+		case \infix(Expression lhs, str operator, Expression rhs) : {
+			if( operator == "||" || operator == "&&")
+				n += 1;
+		}
 	}
 	// returned 1 als ie niets matched?..
 	return n;
 }
 
+int countExpressions(list[Expression] e) {
+	return (0 | it + countExpression(e) | e <- initializers );
+}
+
+int countExpression(Expression e){
+	int n = 0;
+	top-down visit(e) {
+		case \infix(Expression lhs, str operator, Expression rhs) : {
+			println("assignment!");
+			if (operator == "||" || operator == "&&"){
+				n += 1;
+			}
+		}
+	}
+	return n;
+}
+
 CC cc(set[Declaration] decls) {
-  CC result = {};
-  
-  // to be done
-  
-  return result;
+	CC cc = {};
+
+	top-down visit(decls) {
+		case s:\method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :	cc[s.src] = countStatements(impl);
+	}
+	return cc;
 }
 
 alias CCDist = map[int cc, int freq];
 
 CCDist ccDist(CC cc) {
-  // to be done
-}
-
-
-// =================== NOT COUNTED TESTS ======================
-/*
-while(true){		+1
-	if(true) {	+1
-		break;
+  	CCDist result = {};
+  	println(cc);
+  	for (cc_id <- cc){
+  		int count = cc[cc_id];
+  		result[count] += 1;
 	}
-}
-*/
-test bool breakNotCounted(){
-	Statement s = \while(\booleanLiteral(true), \if(\booleanLiteral(true), \break()));
-	return countStatements(s) == 3;
+  	return result;
 }
 
+
+
 /*
-while(true){		+1
-	if(true) {	+1
-		continue;
+* The function below is used in the testing methods to translate the body of a method into a statement
+*/
+Statement translateIntoStatement(str body){
+	loc l = |project://sqat-analysis/src/sqat/series1/test.java|;		//Required, but not used
+	str s = 	"public class test {
+			'	public void testMethod() {
+			'		<body>
+			'	}
+			'}";
+	Declaration d = createAstFromString(l, s, true);
+	top-down-break visit(d){
+		case \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) : return impl;
 	}
-}
-*/
-test bool continueNotCounted(){
-	Statement s = \while(\booleanLiteral(true), \if(\booleanLiteral(true), \continue()));
-	return countStatements(s) == 3;
-}
-
-/*
-while(true){		+1
-	if(true) {	+1
-		return;
-	}
-}
-*/
-test bool returnNotCounted(){
-	Statement s = \while(\booleanLiteral(true), \if(\booleanLiteral(true), \return()));
-	return countStatements(s) == 3;
-}
-
-/*
-if(true) { +1
-	//BLANK
-} else {
-	//BLANK
-}
-*/
-test bool ElseNotCounted(){
-	Statement s = \if(\booleanLiteral(true), \empty(), \empty());
-	return countStatements(s) == 2;
+	return \null() ;
 }
 
 // =================== COUNTED TESTS ======================
-
-/*
-if(true){	+1
-	//BLANK
-}
-*/
-test bool IfCounted(){
-	Statement s = \if(\booleanLiteral(true), \empty());
+test bool ifCounted(){
+	str body = 	"if(true) {		//	+1
+				' 	int x = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
 	return countStatements(s) == 2;
 }
 
-/*
-if(true){	+1
-	//BLANK
-} else {		
-	//BLANK
-}
-*/
-test bool IfWithElseCounted(){
-	Statement s = \if(\booleanLiteral(true), \empty(), \empty());
+test bool ifWithElseCounted(){
+	str body = 	"if(true) {		//	+1
+				' 	int x = 0;
+				'} else { 
+				'	int y = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
 	return countStatements(s) == 2;
 }
 
-/*
-switch(x){
-	case 1: //BLANK		+1
-	case 2: //BLANK		+1
-	case 3: //BLANK		+1
-}
-*/
 test bool casesInSwitchCounted(){
-	Statement s = \switch(\simpleName("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3"))]);
+	str body = 	"int x = 0;
+				'int y;
+				'switch(x){
+				'	case 0 : y = 0;		// +1
+				'	case 1 : y = 1;		// +1
+				'	case 2 : y = 2;		// +1
+				'}";
+	Statement s = translateIntoStatement(body);
 	return countStatements(s) == 4;
 }
 
-/*
-switch(x){
-	case 1: //BLANK		+1
-	case 2: //BLANK		+1
-	case 3: //BLANK		+1
-	default : //BLANK	+1
+test bool forLoopCounted(){
+	str body = 	"for( int i = 0 ; i \< 10 ; i++) {	// +1
+				'	int x = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 2;
 }
-*/
-test bool defaultCaseInSwitchCounted(){
-	Statement s = \switch(\number("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3")), \defaultCase()]);
+
+test bool forLoopWithoutConditionCounted(){
+	str body = 	"for( int i = 0 ; ; i++) {	// +1
+				'	int y = 0;
+				' 	break;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 2;
+}
+
+test bool foreachCounted(){
+	str body = 	"List\<String\> someList = new ArrayList\<String\>();
+				'for (String item : someList) {			//+1
+		    		'	int y = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 2;
+}
+
+test bool whileCounted(){
+	str body = 	"while(true) {			//+1
+		    		'	int y = 0;
+				'}";	
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 2;
+}
+
+test bool booleanAndCounted(){
+	str body = 	"bool z = false && false;		//+1
+		    		'bool z = false && true;			//+1
+		    		'bool z = true && false;			//+1
+				'bool z = true && true;			//+1";
+	Statement s = translateIntoStatement(body);
 	return countStatements(s) == 5;
 }
 
-/*
-switch(x){
-	case 1: //BLANK		+1
-	case 2: //BLANK		+1
-	case 3: //BLANK		+1
-	default : //BLANK	+1
+test bool booleanOrCounted(){
+	str body = 	"bool z = false || false;		//+1
+		    		'bool z = false || true;			//+1
+		    		'bool z = true || false;			//+1
+				'bool z = true || true;			//+1";
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 5;
 }
-test defaultCaseInSwitchCounted(){
-	Statement s = \switch(\number("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3")), \defaultCase()]);
-	return countStatements(s) == 5;
-}*/
-
-/*
-bool x = y == 2 && t == 3;
-test defaultCaseInSwitchCounted(){
-	Statement s = \switch(\number("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3")), \defaultCase()]);
-	return countStatements(s) == 5;
-}*/
-
-
 
 // =================== SPECIAL CASE TESTS ======================
 
-/*
-if(true){			+1
-	//BLANK
-} else {				
-	if(true){		+1
-		// BLANK
-	}				
-}
-
-if(true){			+1
-	//BLANK
-} else if (true) {	+1
-	//BLANK
-}
-*/
-test bool If_ElseIf(){
-	Statement s = \if(\booleanLiteral(true), \empty(), \if(\booleanLiteral(true), \empty()));
+test bool booleanCumutativeCounted(){
+	str body = 	"bool z = false || true && false; ";		//+1 +1
+	Statement s = translateIntoStatement(body);
 	return countStatements(s) == 3;
 }
 
-/*
-if(true){			+1
-	//BLANK
-} else { 
-	if(true){		+1
-		// BLANK
-	} else {	
-		// BLANK
-	}
-}
-
-if(true){			+1
-	//BLANK
-} else if (true) {	+1
-	//BLANK
-} else {	
-	//BLANK
-}
-*/
-test bool If_ElseIf_Else(){
-	Statement s = \if(\booleanLiteral(true), \empty(), \if(\booleanLiteral(true), \empty(), \empty()));
+test bool breakNotCounted(){
+	str body = 	"while(true){		//	+1
+				'	if(true) {		//	+1
+				'		break;
+				'	}
+				'}";
+	Statement s = translateIntoStatement(body);
 	return countStatements(s) == 3;
 }
 
-/*
-switch(x){
-	case 1 : if(true) { 		+1 	+1
-				//BLANK 
-			}
-	default: //BLANK 		+1
-				
+test bool continueNotCounted(){
+	str body = 	"while(true){		//	+1
+				'	if(true) {		//	+1
+				'		continue;
+				'	}
+				'}";
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 3;
 }
-*/
-test bool IfInCase(){
-	Statement s = \switch(\simpleName("x"), [\case(\number("1")), \if(\booleanLiteral(true), \empty()), \defaultCase()]);
+
+test bool returnNotCounted(){
+	str body = 	"while(true){		//	+1
+				'	if(true) {		//	+1
+				'		return;
+				'	}
+				'}";
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 3;
+}
+
+test bool elseNotCounted(){
+	str body = 	"if(true) {		//	+1
+				' 	int x = 0;
+				'} else {
+				'	int y = 0;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 2;
+}
+
+test bool doWhileNotCounted(){
+	str body = 	"do {
+				'	int x = 0;
+				'} while(true);";
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 1;
+}
+
+test bool defaultCaseInSwitchNotCounted(){
+	str body = 	"int x = 0;
+				'int y;
+				'switch(x){
+				'	case 0 : y = 0;		// +1
+				'	case 1 : y = 1;		// +1
+				'	case 2 : y = 2;		// +1
+				'	default : y = 3;
+				'}";
+	Statement s = translateIntoStatement(body);
 	return countStatements(s) == 4;
+}
+
+test bool If_ElseIf(){
+	str ifInElseBody = 	"if(true) {				// +1
+						'	int x = 0;
+						'} else{
+						'	if(true){			//+1
+						'		int y =1;
+						'	}
+						'}";
+	Statement ifInElse = translateIntoStatement(ifInElseBody);
+	str elseIfBody = 	"if(true) {				// +1
+						'	int x = 0;
+						'} else if(true){		//+1
+						'	int y =1;
+						'}";
+	Statement elseIf = translateIntoStatement(elseIfBody);
+	return countStatements(ifInElse) == countStatements(elseIf);
+}
+
+test bool If_ElseIf_Else(){
+	str ifInElseBody = 	"if(true) {				// +1
+						'	int x = 0;
+						'} else{
+						'	if(true){			//+1
+						'		int y = 1;
+						'	} else {
+						'		int z = 1;	
+						'	}
+						'}";
+	Statement ifInElse = translateIntoStatement(ifInElseBody);
+	str elseIfBody = 	"if(true) {				// +1
+						'	int x = 0;
+						'} else if(true){		//+1
+						'	int y = 1;
+						'} else {
+						'	int z = 1;
+						'}";
+	Statement elseIf = translateIntoStatement(elseIfBody);
+	return countStatements(ifInElse) == countStatements(elseIf);
+}
+
+test bool IfInCase(){
+	str body = 	"int x = 0;
+				'int y;
+				'switch(x){
+				'	case 0 : { 			// +1
+				'		if(true){		// +1
+				'			y = 3;
+				'		}
+				'	}
+				'	default : y = 3;
+				'}";
+	Statement s = translateIntoStatement(body);
+	return countStatements(s) == 3;
 }
