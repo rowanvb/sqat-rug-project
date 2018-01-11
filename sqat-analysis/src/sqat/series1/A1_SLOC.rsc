@@ -4,6 +4,7 @@ import IO;
 import ParseTree;
 import String;
 import util::FileSystem;
+import util::Math;
 
 /* 
 
@@ -32,6 +33,10 @@ Bonus:
   vis::Render quickly see where the large files are. 
   (https://en.wikipedia.org/wiki/Treemapping) 
 
+JPacman is considered very small according to the SIG maintainability. ~2500 lines of code is within the interval of 0 - 66k LOC
+Java systems with a code size within that interval are considered very small (++)
+
+
 */
 
 alias SLOC = map[loc file, int sloc];
@@ -39,19 +44,43 @@ loc jpacman = |project://jpacman/|;
 
 SLOC sloc(loc location) {
 	SLOC result = ();
-	int total = 0;
 	set[loc] files = files(location);
 	for (loc file <- files)
 	{
 		if (/\.java/ := file.path) {
 			int count = countLinesOfCodeInFile(file);
 			result [file] = count;
-			total += count;
 		}
 	}	
-	println(total);
   	return result;
-}       
+}
+
+int countTotalSize(loc location){
+	SLOC sloc = sloc(location);
+	return (0 | it + sloc[l] | loc l <- sloc);
+}     
+
+loc getLargestFile(loc location){
+	SLOC sloc = sloc(location);
+	loc max; int size = 0;
+	for (s <- sloc){
+		if (sloc[s] > size){
+			max = s;
+			size = sloc[s];
+		}
+	}
+	return max;
+}	  
+
+void compareLocationSizes(loc loc1, loc loc2){
+	int size1 = countTotalSize(loc1);
+	int size2 = countTotalSize(loc2);
+	println("<loc1> has <size1> lines");
+	println("<loc2> has <size2> lines");
+	real percentage = toReal(size1) / toReal(size1+size2);
+	println("<loc1> <percentage*100>%");
+	println("<loc1> <(1-percentage)*100>%");	
+}
 
 int countLinesOfCodeInFile(loc file)
 {
