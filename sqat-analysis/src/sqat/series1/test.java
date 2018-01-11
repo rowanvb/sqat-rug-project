@@ -5,6 +5,11 @@ import java.util.List;
 
 public class test {
 	public void testMethod() {
+		
+		int y = 0;
+		int z = 2;
+		boolean x = y > 0 &||& z < 1;
+		
 		List<String> someList = new ArrayList<String>();
 		for (String item : someList) {
 		    System.out.println(item);

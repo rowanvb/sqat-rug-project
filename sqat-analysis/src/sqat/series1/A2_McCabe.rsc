@@ -64,6 +64,7 @@ int countStatements(Statement s){
 	    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : n += 1;
 	    	case \while(Expression condition, Statement body) : n += 1;
 	    	case \do(Statement body, Expression condition) : n += 1;
+	    	case Expression : println("Expression");
 	    /*	case \break() : n += 1;
 	    	case \break(str label) : n += 1;
 	    	case \continue() : n += 1;
@@ -185,6 +186,25 @@ test bool defaultCaseInSwitchCounted(){
 	Statement s = \switch(\number("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3")), \defaultCase()]);
 	return countStatements(s) == 5;
 }
+
+/*
+switch(x){
+	case 1: //BLANK		+1
+	case 2: //BLANK		+1
+	case 3: //BLANK		+1
+	default : //BLANK	+1
+}
+test defaultCaseInSwitchCounted(){
+	Statement s = \switch(\number("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3")), \defaultCase()]);
+	return countStatements(s) == 5;
+}*/
+
+/*
+bool x = y == 2 && t == 3;
+test defaultCaseInSwitchCounted(){
+	Statement s = \switch(\number("x"), [\case(\number("1")), \case(\number("2")), \case(\number("3")), \defaultCase()]);
+	return countStatements(s) == 5;
+}*/
 
 
 
