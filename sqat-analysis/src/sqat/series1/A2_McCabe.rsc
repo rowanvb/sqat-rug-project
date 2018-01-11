@@ -1,6 +1,7 @@
 module sqat::series1::A2_McCabe
 
 import lang::java::jdt::m3::AST;
+import sqat::series1::A1_SLOC;
 import ParseTree;
 import String;
 import util::FileSystem;
@@ -38,78 +39,95 @@ Bonus
 
 */
 
-set[Declaration] jpacmanASTs() = createAstsFromEclipseProject(|project://jpacman|, true); 
+alias CycComp = rel[loc method, int complexity];					// When a map is used only string representation of location is stored
+alias CycCompDistribution = map[int complexity, int frequency];
 
-alias CC = rel[loc method, int cc];
-
-CC main(){
-	set[Declaration] decs = jpacmanASTs();
-	CC cc = {};
-
-	top-down visit(decs) {
-		case s:\method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :	cc[s.src] = countStatements(impl);
+CycComp McCabe(loc location){
+	bool collectBindings = false;	//Exact naming or types of expressions not needed 
+	set[Declaration] declarations = createAstsFromEclipseProject(location, collectBindings); 
+	
+	CycComp complexity ={};
+	
+	top-down visit(declarations)	{
+		case statement : \method(Type \return, str n, list[Declaration] p, list[Expression] e, Statement impl) : complexity[statement.src] = computeMethodComplexity(impl);
 	}
-	return cc;
+	
+	return complexity;
 }
 
-int countStatements(Statement s){
-	int n = 1;
-	top-down visit(s) {
-		case \if(Expression condition, Statement thenBranch) : n += 1;
-		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : n += 1;
-		case \case(Expression expression) : n += 1;
-		//case \defaultCase() : n += 1; 
-		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : n += 1;
-	    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : n += 1;
-	    	case \foreach(Declaration parameter, Expression collection, Statement body) : n += 1;
-	    	case \while(Expression condition, Statement body) : n += 1;
+CycCompDistribution McCabeDistribution(CycComp complexities) {
+  	CycCompDistribution distribution = ();
+  	for (complexity <- complexities){
+  		int count = complexity.complexity;
+  		if (count notin distribution){
+  			distribution[count] = 0;
+  		}
+  		distribution[count] += 1;
+	}
+  	return distribution;
+}
+
+int computeMethodComplexity(Statement method){
+	int complexity = 1;
+	top-down visit(method) {
+		case \if(Expression condition, Statement thenBranch) : complexity += 1;
+		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : complexity += 1;
+		case \case(Expression expression) : complexity += 1;
+		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : complexity += 1;
+	    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : complexity += 1;
+	    	case \foreach(Declaration parameter, Expression collection, Statement body) : complexity += 1;
+	    	case \while(Expression condition, Statement body) : complexity += 1;
 		case \infix(Expression lhs, str operator, Expression rhs) : {
 			if( operator == "||" || operator == "&&")
-				n += 1;
+				complexity += 1;
 		}
 	}
-	// returned 1 als ie niets matched?..
-	return n;
+	return complexity;
 }
 
-int countExpressions(list[Expression] e) {
-	return (0 | it + countExpression(e) | e <- initializers );
+// EXERCISE QUESTIONS
+set[loc] highestComplexityMethods(loc location){
+	CycComp complexities = McCabe(location);
+	set[loc] locations = {};
+	int maxComplexity = 0;
+	for(complexity <- complexities){
+		int complexityScore = complexity.complexity;
+  		if(complexityScore > maxComplexity){
+  			locations = {complexity.method};
+  			maxComplexity = complexityScore;
+  		} else if(complexityScore == maxComplexity) {
+  			locations = locations + complexity.method;
+  		}
+	}
+	return locations;
 }
 
-int countExpression(Expression e){
-	int n = 0;
-	top-down visit(e) {
-		case \infix(Expression lhs, str operator, Expression rhs) : {
-			println("assignment!");
-			if (operator == "||" || operator == "&&"){
-				n += 1;
-			}
+map[str level,  real percentage] percentagesOfRiskLevel(loc location){
+	CycComp complexities = McCabe(location);
+
+	map[str level, real percentage] percentages = ("very high" : 0.0, "high" : 0.0, "moderate" : 0.0 , "low" : 0.0);
+	real total = 0.0;
+	for(complexity <- complexities){
+		int complexityScore = complexity.complexity;
+		SLOC s = sloc(complexity.method);
+		int lines = getOneFrom( [*s.sloc]);
+		if(complexityScore < 11) {
+			percentages["low"] += lines;
+		} else if(complexityScore < 21) {
+			percentages["moderate"] += lines ;
+		} else if(complexityScore < 51) {
+			percentages["high"] += lines ;
+		} else {
+			percentages["very high"] += lines;
 		}
+		total += lines;
 	}
-	return n;
-}
-
-CC cc(set[Declaration] decls) {
-	CC cc = {};
-
-	top-down visit(decls) {
-		case s:\method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) :	cc[s.src] = countStatements(impl);
+	for(level <- percentages){
+		percentages[level] = (percentages[level] / total) * 100;
 	}
-	return cc;
-}
-
-alias CCDist = map[int cc, int freq];
-
-CCDist ccDist(CC cc) {
-  	CCDist result = {};
-  	println(cc);
-  	for (cc_id <- cc){
-  		int count = cc[cc_id];
-  		result[count] += 1;
-	}
-  	return result;
-}
-
+	
+	return percentages;
+} 
 
 
 /*
@@ -135,7 +153,7 @@ test bool ifCounted(){
 				' 	int x = 0;
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 2;
+	return computeMethodComplexity(s) == 2;
 }
 
 test bool ifWithElseCounted(){
@@ -145,7 +163,7 @@ test bool ifWithElseCounted(){
 				'	int y = 0;
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 2;
+	return computeMethodComplexity(s) == 2;
 }
 
 test bool casesInSwitchCounted(){
@@ -157,7 +175,7 @@ test bool casesInSwitchCounted(){
 				'	case 2 : y = 2;		// +1
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 4;
+	return computeMethodComplexity(s) == 4;
 }
 
 test bool forLoopCounted(){
@@ -165,7 +183,7 @@ test bool forLoopCounted(){
 				'	int x = 0;
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 2;
+	return computeMethodComplexity(s) == 2;
 }
 
 test bool forLoopWithoutConditionCounted(){
@@ -174,7 +192,7 @@ test bool forLoopWithoutConditionCounted(){
 				' 	break;
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 2;
+	return computeMethodComplexity(s) == 2;
 }
 
 test bool foreachCounted(){
@@ -183,7 +201,7 @@ test bool foreachCounted(){
 		    		'	int y = 0;
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 2;
+	return computeMethodComplexity(s) == 2;
 }
 
 test bool whileCounted(){
@@ -191,7 +209,7 @@ test bool whileCounted(){
 		    		'	int y = 0;
 				'}";	
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 2;
+	return computeMethodComplexity(s) == 2;
 }
 
 test bool booleanAndCounted(){
@@ -200,7 +218,7 @@ test bool booleanAndCounted(){
 		    		'bool z = true && false;			//+1
 				'bool z = true && true;			//+1";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 5;
+	return computeMethodComplexity(s) == 5;
 }
 
 test bool booleanOrCounted(){
@@ -209,7 +227,7 @@ test bool booleanOrCounted(){
 		    		'bool z = true || false;			//+1
 				'bool z = true || true;			//+1";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 5;
+	return computeMethodComplexity(s) == 5;
 }
 
 // =================== SPECIAL CASE TESTS ======================
@@ -217,7 +235,7 @@ test bool booleanOrCounted(){
 test bool booleanCumutativeCounted(){
 	str body = 	"bool z = false || true && false; ";		//+1 +1
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 3;
+	return computeMethodComplexity(s) == 3;
 }
 
 test bool breakNotCounted(){
@@ -227,7 +245,7 @@ test bool breakNotCounted(){
 				'	}
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 3;
+	return computeMethodComplexity(s) == 3;
 }
 
 test bool continueNotCounted(){
@@ -237,7 +255,7 @@ test bool continueNotCounted(){
 				'	}
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 3;
+	return computeMethodComplexity(s) == 3;
 }
 
 test bool returnNotCounted(){
@@ -247,7 +265,7 @@ test bool returnNotCounted(){
 				'	}
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 3;
+	return computeMethodComplexity(s) == 3;
 }
 
 test bool elseNotCounted(){
@@ -257,7 +275,7 @@ test bool elseNotCounted(){
 				'	int y = 0;
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 2;
+	return computeMethodComplexity(s) == 2;
 }
 
 test bool doWhileNotCounted(){
@@ -265,7 +283,7 @@ test bool doWhileNotCounted(){
 				'	int x = 0;
 				'} while(true);";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 1;
+	return computeMethodComplexity(s) == 1;
 }
 
 test bool defaultCaseInSwitchNotCounted(){
@@ -278,7 +296,7 @@ test bool defaultCaseInSwitchNotCounted(){
 				'	default : y = 3;
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 4;
+	return computeMethodComplexity(s) == 4;
 }
 
 test bool If_ElseIf(){
@@ -296,7 +314,7 @@ test bool If_ElseIf(){
 						'	int y =1;
 						'}";
 	Statement elseIf = translateIntoStatement(elseIfBody);
-	return countStatements(ifInElse) == countStatements(elseIf);
+	return computeMethodComplexity(ifInElse) == computeMethodComplexity(elseIf);
 }
 
 test bool If_ElseIf_Else(){
@@ -318,7 +336,7 @@ test bool If_ElseIf_Else(){
 						'	int z = 1;
 						'}";
 	Statement elseIf = translateIntoStatement(elseIfBody);
-	return countStatements(ifInElse) == countStatements(elseIf);
+	return computeMethodComplexity(ifInElse) == computeMethodComplexity(elseIf);
 }
 
 test bool IfInCase(){
@@ -333,5 +351,5 @@ test bool IfInCase(){
 				'	default : y = 3;
 				'}";
 	Statement s = translateIntoStatement(body);
-	return countStatements(s) == 3;
+	return computeMethodComplexity(s) == 3;
 }
