@@ -1,6 +1,5 @@
 module sqat::series1::A2_McCabe
 
-import sqat::series1::A2_McCabe;
 import lang::java::jdt::m3::AST;
 import ParseTree;
 import String;

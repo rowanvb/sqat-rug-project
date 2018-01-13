@@ -1,17 +1,17 @@
 module sqat::series1::A2_McCabe_answers
 
 import sqat::series1::A2_McCabe;
+import sqat::series1::A1_SLOC;
 import lang::java::jdt::m3::AST;
+import analysis::statistics::Correlation;
 import ParseTree;
 import String;
 import util::FileSystem;
 import IO;
 
 /*
-
 Construct a distribution of method cylcomatic complexity. 
 (that is: a map[int, int] where the key is the McCabe complexity, and the value the frequency it occurs)
-
 
 Questions:
 - which method has the highest complexity (use the @src annotation to get a method's location)
@@ -38,10 +38,11 @@ Bonus
 - write visualization using vis::Figure and vis::Render to render a histogram.
 
 */
-
+loc jpac = |project://jpacman-framework|;
+loc jpac_notests = |project://jpacman-no-tests|;
 
 set[loc] highestComplexityMethods(loc location){
-	CycComp complexities = McCabe(location);
+	CycComp complexities = McCabe(|project://jpacman-framework|);
 	set[loc] locations = {};
 	int maxComplexity = 0;
 	for(complexity <- complexities){
@@ -81,4 +82,20 @@ map[str level,  real percentage] percentagesOfRiskLevel(loc location){
 	}
 	
 	return percentages;
-} 
+}
+
+void correlationMcCabeSloc(loc location){
+	CycComp complexities = McCabe(location);
+	
+	lrel[num, num] comparison = [];
+	for(complexity <- complexities){
+		int complexityScore = complexity.complexity;
+		SLOC s = sloc(complexity.method);
+		int lines = getOneFrom( [*s.sloc]);
+		comparison = <complexityScore, lines> + comparison;
+	}
+	num pearson = PearsonsCorrelation(comparison);
+	num spearman = SpearmansCorrelation(comparison);
+	println("Pearsons Correlation : <pearson>");
+	println("Spearmans Correlation : <spearman>");
+}

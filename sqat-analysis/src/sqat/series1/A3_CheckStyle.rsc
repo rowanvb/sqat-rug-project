@@ -21,8 +21,8 @@ Checks:
 	- LineLength (100)
 	- StarImport
 	
-
 Plus: invent your own style violation or code smell and write a checker.
+	- Could we just check for cyclomatic complexity?
 
 Note: since concrete matching in Rascal is "modulo Layout", you cannot
 do checks of layout or comments (or, at least, this will be very hard).
