@@ -37,17 +37,16 @@ CycCompDistribution McCabeDistribution(CycComp complexities) {
 int computeMethodComplexity(Statement method){
 	int complexity = 1;
 	top-down visit(method) {
-		case \if(Expression condition, Statement thenBranch) : complexity += 1;
-		case \if(Expression condition, Statement thenBranch, Statement elseBranch) : complexity += 1;
-		case \case(Expression expression) : complexity += 1;
-		case \for(list[Expression] initializers, Expression condition, list[Expression] updaters, Statement body) : complexity += 1;
-	    	case \for(list[Expression] initializers, list[Expression] updaters, Statement body) : complexity += 1;
-	    	case \foreach(Declaration parameter, Expression collection, Statement body) : complexity += 1;
-	    	case \while(Expression condition, Statement body) : complexity += 1;
-		case \infix(Expression lhs, str operator, Expression rhs) : {
-			if( operator == "||" || operator == "&&")
-				complexity += 1;
-		}
+		case \if(_, _) : 			complexity += 1;
+		case \if(_, _, _) : 			complexity += 1;
+		case \case(_) : 				complexity += 1;
+		case \for(_, _, _, _) : 		complexity += 1;
+	    	case \for(_, _, _) : 		complexity += 1;
+	    	case \foreach(_, _, _) : 	complexity += 1;
+	    	case \while(_, _) : 			complexity += 1;
+		case \catch(_, _) : 			complexity += 1;
+		case \infix(_, "&&", _) : 	complexity += 1;
+		case \infix(_, "||", _) : 	complexity += 1;
 	}
 	return complexity;
 }
@@ -132,6 +131,18 @@ test bool whileCounted(){
 				'}";	
 	Statement s = translateIntoStatement(body);
 	return computeMethodComplexity(s) == 2;
+}
+
+test bool catchCounted(){
+	str body = 	"try {			
+		    		'	int y = 0;
+				'} catch(IOException e) {	// +1
+				'	int x = 0;
+				'} catch(Exception e) {		// +1
+				'	int x = 0;
+				'}";	
+	Statement s = translateIntoStatement(body);
+	return computeMethodComplexity(s) == 3;
 }
 
 test bool booleanAndCounted(){

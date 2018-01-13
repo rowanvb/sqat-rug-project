@@ -1,4 +1,4 @@
-module sqat::series1::A2_McCabe_answers
+module sqat::series1::A2_McCabe_Answers
 
 import sqat::series1::A2_McCabe;
 import sqat::series1::A1_SLOC;
