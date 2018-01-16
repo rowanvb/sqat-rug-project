@@ -2,6 +2,7 @@ module sqat::series2::A1a_StatCov
 
 import lang::java::jdt::m3::Core;
 
+import IO;
 /*
 
 Implement static code coverage metrics by Alves & Visser 
@@ -19,7 +20,7 @@ rel[loc from, loc to]         M3.containment;             // what is logically c
 list[Message]                 M3.messages;                // error messages and warnings produced while constructing a single m3 model
 rel[str simpleName, loc qualifiedName]  M3.names;         // convenience mapping from logical names to end-user readable (GUI) names, and vice versa
 rel[loc definition, loc comments]       M3.documentation; // comments and javadoc attached to declared things
-rel[loc definition, Modifier modifier] M3.modifiers;     // modifiers associated with declared things
+rel[loc definition, Modifier modifier] M3.modifiers;      // modifiers associated with declared things
 
 - module  lang::java::m3::Core:
 
@@ -41,9 +42,112 @@ Questions:
 - how do your results compare to the jpacman results in the paper? Has jpacman improved?
 - use a third-party coverage tool (e.g. Clover) to compare your results to (explain differences)
 
+Notes:
+- Currently it doesn't look at anonymous classes
 
 */
 
 
+data Node 	= program(loc src)
+			| package(loc src)
+			| class(loc src)
+			| method(loc src)
+			;
+
+data Label 	= definition()
+			| call()
+			| virtual_call()
+			| overloading_call()
+			;
+
+alias Graph = rel[Node from, Label label, Node to];
+
 M3 jpacmanM3() = createM3FromEclipseProject(|project://jpacman-framework|);
+
+rel[loc name, loc src] getDeclarationsByScheme(M3 model, str scheme){
+	rel[loc name, loc src] declarations = {};
+	for(tuple[loc name, loc src] declaration <- model.declarations)
+	{
+		if(declaration.name.scheme == scheme){
+			declarations = declarations + declaration;	
+		}
+	}
+	return declarations;
+}
+
+rel[loc name, loc src] getAllMethodsInModel(M3 model){
+	return getDeclarationsByScheme(model, "java+method");
+}
+
+rel[loc name, loc src] getAllPackagesInModel(M3 model){
+	return getDeclarationsByScheme(model, "java+package");
+}
+
+rel[loc name, loc src] getAllClassesInModel(M3 model){
+	return getDeclarationsByScheme(model, "java+class");
+}
+
+rel[loc name, loc src] getAllInterfacesInModel(M3 model){
+	return getDeclarationsByScheme(model, "java+interface");
+}
+
+set[loc] getAllTestMethodsInModel(M3 model){
+	rel[loc name, loc src] methods = {};
+}
+
+
+
+Graph constructContainmentGraph(M3 model){
+	rel[loc name, loc src] packages = getAllPackagesInModel(model);
+	rel[loc name, loc src] classes = getAllClassesInModel(model);
+	rel[loc name, loc src] methods = getAllMethodsInModel(model);
+	rel[loc from, loc to] containingRelations = model.containment;
+	
+	Graph relations = {};
+	
+	for(tuple[loc from, loc to] relation <- containingRelations){
+		if(relation.from in packages.name && relation.to in classes.name){
+			relations = relations + <package(relation.from), definition(), class(relation.to)>;
+		} else if (relation.from in classes.name && relation.to in methods.name) {
+			relations = relations + <class(relation.from), definition(), method(relation.to)>;;
+		}
+	}
+	
+	return relations;
+}
+
+Graph graphTransitiveClosure(Graph callGraph){
+	return solve(callGraph){
+		
+		callGraph = callGraph + (callGraph o callGraph);
+	}
+}
+
+Graph constructCallGraph(M3 model){
+	rel[loc from, loc to] callRelations = model.methodInvocation;
+	rel[loc from, loc to] overrides = model.methodOverrides;
+	
+	Graph calls = {};
+	
+	for(tuple[loc from, loc to] callRelation <- callRelations){
+		calls = calls + <method(callRelation.from), call(), method(callRelation.to)>;
+	}
+	
+	for(tuple[loc from, loc to] override <- overrides){
+		calls = calls + <method(override.to), call(), method(override.from)>;
+	}
+	
+	 // Overloading is unclear
+	
+	return calls;
+}
+
+
+
+
+
+
+
+
+
 

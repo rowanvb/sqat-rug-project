@@ -166,7 +166,7 @@ test bool booleanOrCounted(){
 // =================== SPECIAL CASE TESTS ======================
 
 test bool booleanCumutativeCounted(){
-	str body = 	"bool z = false || true && false; ";		//+1 +1
+	str body = 	"bool z = false || true && false; //+1 +1 ";		
 	Statement s = translateIntoStatement(body);
 	return computeMethodComplexity(s) == 3;
 }
