@@ -7,6 +7,8 @@ import util::FileSystem;
 import IO;
 import lang::java::jdt::m3::AST;
 import util::ResourceMarkers;
+import String;
+import Set;
 
 
 /*
@@ -20,6 +22,7 @@ Checks:
 	- MethodNaming
 	- LineLength (100)
 	- StarImport
+	- Controlflow statement bodies without opening with curly brace
 	
 Plus: invent your own style violation or code smell and write a checker.
 	- Could we just check for cyclomatic complexity?
@@ -51,42 +54,113 @@ Bonus:
 - write simple "refactorings" to fix one or more classes of violations 
 
 */
-str methodNameRegex = "/^[a-z][a-zA-Z0-9_]*$/";
-	int i = 0;
 
-
-set[Message] checkStyle(loc project) {
-  set[Message] result = {};
-  for (loc l <- files(project), l.extension == "java") {
-  	start[CompilationUnit] u = parse(#start[CompilationUnit], l, allowAmbiguity = true);
-  	
-  }
-	set[Declaration] AST = createAstsFromEclipseProject(project, true); 
-  	
+set[Message] checkStyle(loc project, int maxLineLength = 100) {
+  	set[Message] result = {};
+	set[Declaration] AST = createAstsFromEclipseProject(project, true);   	
+  	for (loc l <- files(project), l.extension == "java") {
+  		result = result + createLineMessages(l, maxLineLength);  	
+  		result = result + createImportMessages(l);
+  	}
 	result = result + createMethodNamingMessages(AST);	
-  // to be done
-  // implement each check in a separate function called here. 
-  addMessageMarkers(result);
-  return result;
+	result = result + createControlFlowMessages(AST);
+  	addMessageMarkers(result);
+  	return result;
+}
+
+set[Message] createControlFlowMessages(set[Declaration] declarations) {
+	set[Message] result = {};
+	set[loc] statements = {};
+	set[loc] elseStatements = {};
+	top-down visit (declarations) {    
+		case \while(_, Statement body) : statements = statements +  body.src;
+		case \for(_, _, _, Statement body) : statements = statements + body.src;
+		case \for(_, _, Statement body) : statements = statements + body.src;
+		case \foreach(_, _, Statement body) : statements = statements + body.src;
+		case \if (_, Statement body, Statement e) : { 
+			statements = statements + body.src;
+			elseStatements = elseStatements + e.src; 
+		}
+		case \if (_, Statement body) : statements = statements + body.src;
+		case \try (Statement body, _) : statements = statements + body.src;
+		case \try (Statement body, _, _) : statements = statements + body.src;
+		case \catch (_, Statement body) : statements + statements + body.src;	
+	} 
+	for (loc l <- statements) {
+		result = result + checkControlFlow(l);
+	}
+	for (loc l <- elseStatements) {
+		result = result + checkElseBranch(l);
+	}
+	return result;
 }
 
 set[Message] createMethodNamingMessages(set[Declaration] declarations) {
 	set[Message] result = {};
-	map[loc l, str s] wrongMethods = ();
-  	top-down-break visit (declarations) {
-    	case theMethod: \method(Type \return, str name, list[Declaration] parameters, list[Expression] exceptions, Statement impl) : {
-    		wrongMethods[theMethod.src] = name;
-		}       
-	} 
-	map[loc, str] wrong = wrongMethodNaming(wrongMethods);
+	map[loc l, str s] methods = ();
+  	top-down visit (declarations) {
+    	case theMethod: \method(_, str name, _, _, _) : methods[theMethod.src] = name;
+    	case theMethod: \method(_, str name, _, _) : methods[theMethod.src] = name;       
+	}
+	map[loc, str] wrong = wrongMethodNaming(methods);
 	for (loc l <- wrong) {
-		result = result + errorMessage("Invalid name <wrong[l]>", l);
+		result = result + warningMessage("Invalid name <wrong[l]>", l);
 	}
 	return result;
 }
 
 map[loc, str] wrongMethodNaming(map[loc, str] methodNames){
 	return (l : methodNames[l] | loc l <- methodNames, !(/^[a-z][a-zA-Z0-9]*$/ := methodNames[l]) );
+}
+
+set[Message] createLineMessages(loc file, int maxlen) {
+	set[Message] result = {};
+	list[str] lines = readFileLines(file);
+	int pos = 0;
+	for (str line <- lines){
+		if (size(line) > maxlen)
+			result = result + warningMessage("Line is too long <size(line)>", file(pos, size(line), <0,0>, <0,0>));
+		pos += size(line) + 2;
+	}
+	return result;
+}
+
+set[Message] createImportMessages(loc file) {
+	set[Message] result = {};
+	list[str] lines = readFileLines(file);
+	int pos = 0;
+	for (str line <- lines){
+		if (/import/ := line[0..6] && /\*/ := line) 
+			result = result + warningMessage("Import * is not allowed <line> ", file(pos, size(line), <0,0>, <0,0>));
+		pos += size(line) + 2;
+	}
+	return result;
+}
+
+set[Message] checkControlFlow(loc l) {
+	list[str] lines = readFileLines(l);
+	str file = listToString(lines);
+	set[Message] result = {};
+	if (!(/^\{[\W\w]*\}$/m := file)) {
+		result = result + warningMessage("Control flow statement bodies should open with a curly brace on the same line", l);
+	}
+	return result;
+}
+
+set[Message] checkElseBranch(loc l){
+	list[str] lines = readFileLines(l);
+	str file = listToString(lines);
+	set[Message] result = {};
+	if (!(/^\{[\W\w]*\}$/m := file || /if/m := file[1..3])) 
+		result = result + warningMessage("Control flow statement bodies should open with a curly brace on the same line", l);
+	return result;
+}
+str listToString(list[str] lines){
+	str file = "";
+		for (str line <- lines){
+		file += "\n" + line;
+	}
+	return file;
 }
 
 Message errorMessage(str msg, loc at) {
@@ -101,3 +175,46 @@ Message infoMessage(str msg, loc at){
 	return info(msg, at);
 }
 
+Declaration translateIntoDeclaration(str body){
+	loc l = |project://sqat-analysis/src/sqat/series1/A3_CheckStyle.rsc|;		//Required, but not used
+	str s = "public class test {
+			'	public void testMethod() {
+			'		<body>
+			'	}
+			'}";
+	Declaration d = createAstFromString(l, s, true);
+	println(d);
+	return d;
+}
+
+set[Declaration] fileToDeclarationSet(loc file) {
+	return {} + createAstFromFile(file, true);
+}
+
+test bool correctStatement() {
+	set[Declaration] s = fileToDeclarationSet(|project://sqat-analysis/src/sqat/testfiles/CheckStyleInput_1.java|);
+	set[Message] messages = createControlFlowMessages(s);
+	return size(messages) == 0;
+}
+
+test bool statementWithoutCurly() {
+	set[Declaration] s = fileToDeclarationSet(|project://sqat-analysis/src/sqat/testfiles/CheckStyleInput_2.java|);
+	set[Message] messages = createControlFlowMessages(s);
+	return size(messages) == 4;
+}
+
+test bool pascalCaseMethodName() {
+	set[Declaration] s = fileToDeclarationSet(|project://sqat-analysis/src/sqat/testfiles/CheckStyleInput_3.java|);
+	set[Message] messages = createMethodNamingMessages(s);
+	return size(messages) == 2;
+}
+
+test bool tooLongLine() {
+	set[Message] messages = createLineMessages(|project://sqat-analysis/src/sqat/testfiles/CheckStyleInput_1.java|, 100);
+	return size(messages) == 2;
+}
+
+test bool importStar() {
+	set[Message] messages = createImportMessages(|project://sqat-analysis/src/sqat/testfiles/CheckStyleInput_1.java|);
+	return size(messages) == 2;
+}
