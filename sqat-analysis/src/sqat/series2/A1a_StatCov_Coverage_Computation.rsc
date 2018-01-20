@@ -1,6 +1,7 @@
-module sqat::series2::A1a_StatCov
+module sqat::series2::A1a_StatCov_Coverage_Computation
 
 import lang::java::jdt::m3::Core;
+import sqat::series2::A1a_StatCov_Graph_Construction;
 
 import Set;
 import String;
@@ -53,7 +54,7 @@ Notes:
 alias MethodCoverage = real;
 alias ClassCoverage = map[loc name, real coverage];
 alias PackageCoverage = map[loc name, real coverage];
-alias CoverageStatistics = tuple[PackageCoverage, ClassCoverage, MethodCoverage];
+alias CoverageStatistics = tuple[MethodCoverage mc, PackageCoverage pc, ClassCoverage cc];
 
 map[loc method, bool covered] determineCoveredMethods(M3 model){
 	rel[loc name, loc src] testMethods = getAllTestMethodsInModel(model);
@@ -75,26 +76,29 @@ map[loc method, bool covered] determineCoveredMethods(M3 model){
 MethodCoverage computeMethodCoverage(Graph containmentGraph, map[loc method, bool covered] coveredMethods){
 	int methodCount = size(coveredMethods.method);
 	int coveredMethodCount = size({ m | loc m <- coveredMethods, coveredMethods[m] } );
-	
-	return (toReal(coveredMethodCount) / toReal(methodCount)) * 100.0;
+	MethodCoverage mc = (toReal(coveredMethodCount) / toReal(methodCount)) * 100.0;
+	return mc;
+}
+
+real computeCoverageOfItem(tuple[loc name, loc src] item, Graph containmentGraph, map[loc method, bool covered] coveredMethods, M3 model){
+		rel[loc name, loc src] allMethods = getAllNonTestMethodsInModel(model);
+		set[loc] methods = { containment.to.src | tuple[Node from, Label l, Node to] containment <- containmentGraph, 
+																						containment.from.src == item.name,
+																						containment.to.src in allMethods.name} ;
+		set[loc] covered = { m | loc m <- methods, coveredMethods[m]};
+		if(size(methods) != 0) {
+			real percentage = (toReal(size(covered)) / size(methods)) * 100;
+			return percentage;
+		} else {
+			return 0.0;
+		}
 }
 
 ClassCoverage computeClassCoverage(Graph containmentGraph, map[loc method, bool covered] coveredMethods, M3 model){
 	ClassCoverage cov = ();
 	rel[loc name, loc src] classes = getAllNonTestClassesInModel(model);
-	rel[loc name, loc src] allMethods = getAllNonTestMethodsInModel(model);
 	for(tuple[loc name, loc src] class <- classes){
-		set[loc] methods = { item.to.src | tuple[Node from, Label l, Node to] item <- containmentGraph, 
-																						item.from.src == class.name,
-																						item.to.src in allMethods.name} ;
-		set[loc] covered = { m | loc m <- methods, coveredMethods[m]};
-		println("<class.name> -\> <size(covered)> / <size(methods)>");
-		if(size(methods) != 0) {
-			real percentage = (toReal(size(covered)) / size(methods)) * 100;
-			cov[class.name] = percentage;
-		} else {
-			cov[class.name] = 0.0;
-		}
+		cov[class.name] = computeCoverageOfItem(class, containmentGraph, coveredMethods, model);
 	}
 	return cov;
 }
@@ -102,19 +106,8 @@ ClassCoverage computeClassCoverage(Graph containmentGraph, map[loc method, bool 
 PackageCoverage computePackageCoverage(Graph containmentGraph, map[loc method, bool covered] coveredMethods, M3 model){
 	PackageCoverage cov = ();
 	rel[loc name, loc src] packages = getAllNonTestPackagesInModel(model);
-	rel[loc name, loc src] allMethods = getAllNonTestMethodsInModel(model);
 	for(tuple[loc name, loc src] package <- packages){
-		set[loc] methods = { item.to.src | tuple[Node from, Label l, Node to] item <- containmentGraph, 
-																						item.from.src == package.name,
-																						item.to.src in allMethods.name};
-		set[loc] covered = { m | loc m <- methods, coveredMethods[m] };
-		
-		if(size(methods) != 0) {
-			real percentage = (toReal(size(covered)) / size(methods)) * 100;
-			cov[package.name] = percentage;
-		} else {
-			cov[package.name] = 0.0;
-		}
+		cov[package.name] = computeCoverageOfItem(package, containmentGraph, coveredMethods, model);
 	}
 	return cov;
 }
@@ -130,7 +123,7 @@ CoverageStatistics computeCoverageStatisticsForProject(loc project = |project://
 	ClassCoverage cc = computeClassCoverage(containmentGraph, coveredMethods, model);
 	PackageCoverage pc = computePackageCoverage(containmentGraph, coveredMethods, model);
 	
-	CoverageStatistics stats = <pc, cc, mc>;
+	CoverageStatistics stats = <mc, pc, cc>;
 	return stats;
 }
 
