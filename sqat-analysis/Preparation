@@ -1,0 +1,6 @@
+
+
+A1a:
+	- Generate clover report
+			1. Open java views
+			2. Run clover as junit tests
