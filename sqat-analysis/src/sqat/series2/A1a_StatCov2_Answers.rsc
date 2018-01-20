@@ -64,10 +64,6 @@ data Label 	= definition()
 			;
 
 alias Graph = rel[Node from, Label label, Node to];
-alias MethodCoverage = real;
-alias ClassCoverage = map[loc name, real coverage];
-alias PackageCoverage = map[loc name, real coverage];
-alias CoverageStatistics = tuple[PackageCoverage, ClassCoverage, MethodCoverage];
 
 M3 jpacmanM3() = createM3FromEclipseProject(|project://jpacman-framework|);
 
@@ -86,6 +82,19 @@ rel[loc name, loc src] getAllMethodsInModel(M3 model){
 	return getDeclarationsByScheme(model, "java+method") + getDeclarationsByScheme(model, "java+constructor");
 }
 
+rel[loc name, loc src] getAllPackagesInModel(M3 model){
+	return getDeclarationsByScheme(model, "java+package");
+}
+
+rel[loc name, loc src] getAllClassesInModel(M3 model){
+	return getDeclarationsByScheme(model, "java+class");
+}
+
+rel[loc name, loc src] getAllInterfacesInModel(M3 model){
+	return getDeclarationsByScheme(model, "java+interface");
+}
+
+// Bases decision on the src path containing the word test
 rel[loc name, loc src] getAllTestMethodsInModel(M3 model){ 
 	rel[loc name, loc src] methods = getAllMethodsInModel(model);
 	return {m | m <- methods, contains(m.src.path, "test") };
@@ -95,18 +104,6 @@ rel[loc name, loc src] getAllNonTestMethodsInModel(M3 model){
 	rel[loc name, loc src] methods = getAllMethodsInModel(model);
 	return {m | m <- methods, !contains(m.src.path, "test") };
 }
-
-rel[loc name, loc src] getAllNonTestPackagesInModel(M3 model){
-	rel[loc name, loc src] packages =  getDeclarationsByScheme(model, "java+package");
-	return {p | p <- packages, !contains(p.src.path, "test") };
-}
-
-rel[loc name, loc src] getAllNonTestClassesInModel(M3 model){
-	rel[loc name, loc src] classes = getDeclarationsByScheme(model, "java+class");
-	return {c | c <- classes, !contains(c.src.path, "test") };
-}
-
-
 
 Graph graphTransitiveClosure(Graph gr){
 	println("<size(gr)>");
@@ -166,7 +163,7 @@ Graph constructCallGraph(M3 model){
 }
 
 
-rel[loc method, bool covered] determineCoveredMethods(M3 model){
+rel[loc method, bool covered] determineCoveredMethodsOfProject(M3 model){
 	rel[loc name, loc src] testMethods = getAllTestMethodsInModel(model);
 	rel[loc name, loc src] methods = getAllNonTestMethodsInModel(model);
 	
@@ -174,55 +171,15 @@ rel[loc method, bool covered] determineCoveredMethods(M3 model){
 	
 	set[loc name] testedMethods = { item.to.src | tuple[Node from, Label l, Node to] item <- callGraph, 
 																						item.from.src in testMethods.name,
-																						item.to.src notin testMethods.name};
+																						item.l == call()};
 																						
 	return { <name, (name in testedMethods)> | loc name <- methods.name };
 }
 
-MethodCoverage computeMethodCoverage(Graph containmentGraph, rel[loc method, bool covered] coveredMethods){
-	int methodCount = size(coveredMethods);
-	int coveredMethodCount = size({ m | tuple[loc method, bool covered] m <- coveredMethods, m.covered } );
-	
-	return (toReal(coveredMethodCount) / toReal(methodCount)) * 100.0;
-}
-
-ClassCoverage computeClassCoverage(Graph containmentGraph, rel[loc method, bool covered] coveredMethods, M3 model){
-	ClassCoverage cov = ();
-	rel[loc name, loc src] classes = getAllNonTestClassesInModel(model);
-	for(tuple[loc name, loc src] class <- classes){
-		set[loc] methods = { item.to.src | tuple[Node from, Label l, Node to] item <- containmentGraph, item.from.src == class.name} ;
-		set[loc] covered = { m.method | tuple[loc method, bool covered] m <- coveredMethods, m.method in methods };
-		real percentage = size(covered) * 1.0;// / size(methods) * 1.0;
-		cov[class.name] = percentage;
-	}
-	return cov;
-}
-
-PackageCoverage computePackageCoverage(Graph containmentGraph, rel[loc method, bool covered] coveredMethods, M3 model){
-	PackageCoverage cov = ();
-	rel[loc name, loc src] packages = getAllNonTestPackagesInModel(model);
-	for(tuple[loc name, loc src] package <- packages){
-		set[loc] methods = { item.to.src | tuple[Node from, Label l, Node to] item <- containmentGraph, item.from.src == package.name} ;
-		set[loc] covered = { m.method | tuple[loc method, bool covered] m <- coveredMethods, m.method in methods };
-		real percentage = (toReal(size(covered)) / toReal(size(methods)));
-		cov[package.name] = percentage;
-	}
-	return cov;
-}
-
-CoverageStatistics computeCoverageStatisticsForProject(loc project = |project://jpacman-framework|){
-	M3 model = createM3FromEclipseProject(project);
-	println("Constructing containment graph...");
+real calculateMethodCoverageOfProject(M3 model, map[loc name, bool covered] methodCoverage){ // TODO: Add project
 	Graph containmentGraph = graphTransitiveClosure(constructContainmentGraph(model));
-	println("Determining covered methods...");
-	rel[loc method, bool covered] coveredMethods = determineCoveredMethods(model);
-	
-	MethodCoverage mc = computeMethodCoverage(containmentGraph, coveredMethods);
-	ClassCoverage cc = computeClassCoverage(containmentGraph, coveredMethods, model);
-	PackageCoverage pc = computePackageCoverage(containmentGraph, coveredMethods, model);
-	
-	CoverageStatistics stats = <pc, cc, mc>;
-	return stats;
+							
+	return toReal((toReal(size(testedMethods) - size(testMethods)) / toReal(size(methods))) * 100.0);
 }
 
 
