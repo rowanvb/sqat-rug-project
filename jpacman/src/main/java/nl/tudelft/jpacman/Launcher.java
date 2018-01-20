@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 
+//import coverage_api.CoverageAPI;
 import nl.tudelft.jpacman.board.BoardFactory;
 import nl.tudelft.jpacman.board.Direction;
 import nl.tudelft.jpacman.game.Game;
@@ -217,6 +218,7 @@ public class Launcher {
 	 *             When a resource could not be read.
 	 */
 	public static void main(String[] args) throws IOException {
-		new Launcher().launch();
+		CoverageAPI.hit("test", "method", "line");
+		//new Launcher().launch();
 	}
 }

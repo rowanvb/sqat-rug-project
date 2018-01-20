@@ -1,8 +1,11 @@
 module sqat::series2::A1b_DynCov
 
 import Java17ish;
+import IO;
 import ParseTree;
+import String;
 import util::FileSystem;
+import util::Math;
 
 /*
 
@@ -26,6 +29,7 @@ Questions
 - which methods have full line coverage?
 - which methods are not covered at all, and why does it matter (if so)?
 - what are the drawbacks of source-based instrumentation?
+		- Running source-base instrumentation requires a working installation of the software. 
 
 Tips:
 - create a shadow JPacman project (e.g. jpacman-instrumented) to write out the transformed source files.
@@ -42,7 +46,65 @@ Tips:
    [NT]"...", where NT represents the desired non-terminal (e.g. Expr, IntLiteral etc.).  
 
 */
+loc API_LOCATION = |project://sqat-analysis/src/sqat/series2/coverage_api/CoverageAPI.java|;
+//apiImport = (ImportDec)''
 
+loc updateAuthority(loc project){
+	project.authority = project.authority + "-instrumented";
+	return project;
+}
+
+/*void instrumentSourceCodeFile(loc file){
+	tree = parse(#start[CompilationUnit], file, allowAmbiguity=true);
+	x = visit(tree) {
+		case (CompilationUnit) `<PackageDec? p> <ImportDec* i> <TypeDec* t>` => 
+		case (MethodBody) `{<BlockStm* stms>}` => (MethodBody)`{<BlockStm call> <BlockStm* stms>}`
+	}
+	x = top-down-break visit(tree) {
+		case (CompilationUnit) `<PackageDec? package> <ImportDec* imports> <TypeDec* types>` => (CompilationUnit)`<PackageDec? package> <ImportDec* imports> <ImportDec api> <TypeDec* types>`
+	}
+	cnt1 = 0;
+	x2 = visit(tree) {
+		case (MethodBody) `{<BlockStm* stms>}` => blockify(putAfterEvery(stms, callStmt, name))
+	}
+}*/
+
+void handleFile(loc file){
+	if(contains(file.path, "src/main/java") && contains(file.file, ".java")){ // Source code
+		println(file);
+	} else {
+		str text = readFile(file);
+		writeFile(updateAuthority(file), text);
+	}
+}
+
+void handleDirectory(loc dir){
+	mkDirectory(updateAuthority(dir));
+	for(f <- dir.ls){
+		handle(f);API_LOCATION
+	}
+}
+
+void handle(loc f){
+	if(isDirectory(f)){
+		handleDirectory(f);
+	} else if(isFile(f)){
+		handleFile(f);
+	}
+}
+
+void createInstrumentedProject(loc p = |project://jpacman-framework|){
+	mkDirectory(updateAuthority(p));
+	for(loc file <- p.ls){
+		handle(file);
+	}
+	loc api = updateAuthority(p);;
+	api.path = api.path + "src/main/java/coverage_api";
+	api.file = api.file + "/CoverageAPI.java";
+	mkDirectory(api);
+	str text = readFile(API);
+	writeFile(updateAuthority(api), text);
+}
 
 void methodCoverage(loc project) {
   // to be done
