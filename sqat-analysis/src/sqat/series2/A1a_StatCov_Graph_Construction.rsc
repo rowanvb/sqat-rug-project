@@ -59,8 +59,6 @@ data Node 	= compilationUnit(loc src)
 
 data Label 	= definition()
 			| call()
-			| virtual_call()
-			| overloading_call()
 			;
 
 alias Graph = rel[Node from, Label label, Node to];
@@ -106,7 +104,17 @@ rel[loc name, loc src] getAllNonTestClassesInModel(M3 model){
 	return {c | c <- classes, !contains(c.src.path, "test") };
 }
 
+bool isClassNode(Node n){
+	return n.src.scheme == "java+class";
+}
 
+bool isPackageNode(Node n){
+	return n.src.scheme == "java+package";
+}
+
+bool isMethodNode(Node n){
+	return (n.src.scheme == "java+constructor" || n.src.scheme == "java+method");
+}
 
 Graph graphTransitiveClosure(Graph gr){
 	println("<size(gr)>");
@@ -128,7 +136,9 @@ Graph constructContainmentGraph(M3 model){
 	Graph relations = {};
 	
 	for(tuple[loc from, loc to] relation <- containingRelations){
-		if(relation.from.scheme == "java+package" && relation.to.scheme == "java+compilationUnit"){
+		if(relation.from.scheme == "java+package" && relation.to.scheme == "java+package"){
+			relations = relations + <package(relation.from), definition(), package(relation.to)>;
+		} else if(relation.from.scheme == "java+package" && relation.to.scheme == "java+compilationUnit"){
 			relations = relations + <package(relation.from), definition(), compilationUnit(relation.to)>;
 		} else if (relation.from.scheme == "java+compilationUnit" && relation.to.scheme == "java+class") {
 			relations = relations + <class(relation.from), definition(), method(relation.to)>;;
@@ -160,13 +170,10 @@ Graph constructCallGraph(M3 model){
 		calls = calls + new;
 	}
 	
-	 // Overloading is unclear
-	
 	return calls;
 }
 
-
-rel[loc method, bool covered] determineCoveredMethods(M3 model){
+map[loc method, bool covered] determineCoveredMethods(M3 model){
 	rel[loc name, loc src] testMethods = getAllTestMethodsInModel(model);
 	rel[loc name, loc src] methods = getAllNonTestMethodsInModel(model);
 	
@@ -176,36 +183,56 @@ rel[loc method, bool covered] determineCoveredMethods(M3 model){
 																						item.from.src in testMethods.name,
 																						item.to.src notin testMethods.name};
 																						
-	return { <name, (name in testedMethods)> | loc name <- methods.name };
+	map[loc, bool] coverage = ();
+	for(loc name <- methods.name){
+		coverage[name] = (name in testedMethods);
+	}
+	return coverage;
 }
 
-MethodCoverage computeMethodCoverage(Graph containmentGraph, rel[loc method, bool covered] coveredMethods){
-	int methodCount = size(coveredMethods);
-	int coveredMethodCount = size({ m | tuple[loc method, bool covered] m <- coveredMethods, m.covered } );
+MethodCoverage computeMethodCoverage(Graph containmentGraph, map[loc method, bool covered] coveredMethods){
+	int methodCount = size(coveredMethods.method);
+	int coveredMethodCount = size({ m | loc m <- coveredMethods, coveredMethods[m] } );
 	
 	return (toReal(coveredMethodCount) / toReal(methodCount)) * 100.0;
 }
 
-ClassCoverage computeClassCoverage(Graph containmentGraph, rel[loc method, bool covered] coveredMethods, M3 model){
+ClassCoverage computeClassCoverage(Graph containmentGraph, map[loc method, bool covered] coveredMethods, M3 model){
 	ClassCoverage cov = ();
 	rel[loc name, loc src] classes = getAllNonTestClassesInModel(model);
+	rel[loc name, loc src] allMethods = getAllNonTestMethodsInModel(model);
 	for(tuple[loc name, loc src] class <- classes){
-		set[loc] methods = { item.to.src | tuple[Node from, Label l, Node to] item <- containmentGraph, item.from.src == class.name} ;
-		set[loc] covered = { m.method | tuple[loc method, bool covered] m <- coveredMethods, m.method in methods };
-		real percentage = size(covered) * 1.0;// / size(methods) * 1.0;
-		cov[class.name] = percentage;
+		set[loc] methods = { item.to.src | tuple[Node from, Label l, Node to] item <- containmentGraph, 
+																						item.from.src == class.name,
+																						item.to.src in allMethods.name} ;
+		set[loc] covered = { m | loc m <- methods, coveredMethods[m]};
+		println("<class.name> -\> <size(covered)> / <size(methods)>");
+		if(size(methods) != 0) {
+			real percentage = (toReal(size(covered)) / size(methods)) * 100;
+			cov[class.name] = percentage;
+		} else {
+			cov[class.name] = 0.0;
+		}
 	}
 	return cov;
 }
 
-PackageCoverage computePackageCoverage(Graph containmentGraph, rel[loc method, bool covered] coveredMethods, M3 model){
+PackageCoverage computePackageCoverage(Graph containmentGraph, map[loc method, bool covered] coveredMethods, M3 model){
 	PackageCoverage cov = ();
 	rel[loc name, loc src] packages = getAllNonTestPackagesInModel(model);
+	rel[loc name, loc src] allMethods = getAllNonTestMethodsInModel(model);
 	for(tuple[loc name, loc src] package <- packages){
-		set[loc] methods = { item.to.src | tuple[Node from, Label l, Node to] item <- containmentGraph, item.from.src == package.name} ;
-		set[loc] covered = { m.method | tuple[loc method, bool covered] m <- coveredMethods, m.method in methods };
-		real percentage = (toReal(size(covered)) / toReal(size(methods)));
-		cov[package.name] = percentage;
+		set[loc] methods = { item.to.src | tuple[Node from, Label l, Node to] item <- containmentGraph, 
+																						item.from.src == package.name,
+																						item.to.src in allMethods.name};
+		set[loc] covered = { m | loc m <- methods, coveredMethods[m] };
+		
+		if(size(methods) != 0) {
+			real percentage = (toReal(size(covered)) / size(methods)) * 100;
+			cov[package.name] = percentage;
+		} else {
+			cov[package.name] = 0.0;
+		}
 	}
 	return cov;
 }
@@ -215,7 +242,7 @@ CoverageStatistics computeCoverageStatisticsForProject(loc project = |project://
 	println("Constructing containment graph...");
 	Graph containmentGraph = graphTransitiveClosure(constructContainmentGraph(model));
 	println("Determining covered methods...");
-	rel[loc method, bool covered] coveredMethods = determineCoveredMethods(model);
+	map[loc method, bool covered] coveredMethods = determineCoveredMethods(model);
 	
 	MethodCoverage mc = computeMethodCoverage(containmentGraph, coveredMethods);
 	ClassCoverage cc = computeClassCoverage(containmentGraph, coveredMethods, model);
