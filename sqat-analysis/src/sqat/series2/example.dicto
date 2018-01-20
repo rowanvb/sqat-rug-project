@@ -1,4 +1,4 @@
-
-foo.Foo cannot depend bar.Bar
-foo.Foo::init cannot instantiate bar.Bar
-foo cannot import bar
+nl.tudelft.jpacman.game.SinglePlayerGame cannot depend nl.tudelft.jpacman.game.Game
+nl.tudelft.jpacman.game.SinglePlayerGame::getPlayers cannot instantiate nl.tudelft.jpacman.level.Player
+nl.tudelft.jpacman.level.CollisionInteractionMap::collide(C1,C2) cannot instantiate nl.tudelft.jpacman.level.Player
+nl.tudelft.jpacman.game.SinglePlayerGame cannot import nl.tudelft.jpacman.level
