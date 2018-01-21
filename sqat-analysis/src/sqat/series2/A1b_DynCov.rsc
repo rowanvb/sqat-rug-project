@@ -46,42 +46,79 @@ Tips:
    [NT]"...", where NT represents the desired non-terminal (e.g. Expr, IntLiteral etc.).  
 
 */
+
 loc API_LOCATION = |project://sqat-analysis/src/sqat/series2/coverage_api/CoverageAPI.java|;
-//apiImport = (ImportDec)''
+ImportDec apiImport = (ImportDec)`import coverage_api.CoverageAPI;`;
+
+loc classLocation;
+loc methodLocation;
+rel[str hitString, loc class, loc method] methods;
+rel[str hitString, loc class, loc method, loc line] lines;
 
 loc updateAuthority(loc project){
 	project.authority = project.authority + "-instrumented";
 	return project;
 }
 
-/*void instrumentSourceCodeFile(loc file){
+BlockStm apiCallMethodStatement(){
+	StringLiteral cl = parse(#StringLiteral, "\"<classLocation>\"");
+	StringLiteral ml = parse(#StringLiteral, "\"<methodLocation>\"");
+	return (BlockStm)`CoverageAPI.hit(<StringLiteral cl>, <StringLiteral ml>);`;
+}
+
+BlockStm apiCallStatement(loc l) {
+	StringLiteral cl = parse(#StringLiteral, "\"<classLocation>\"");
+	StringLiteral ml = parse(#StringLiteral, "\"<methodLocation>\"");
+	StringLiteral ll = parse(#StringLiteral, "\"<l>\"");
+	BlockStm s = (BlockStm)`CoverageAPI.hit(<StringLiteral cl>, <StringLiteral ml>, <StringLiteral ll>);`;
+	return s;
+}
+
+void instrumentSourceCodeFile(loc file){
 	tree = parse(#start[CompilationUnit], file, allowAmbiguity=true);
-	x = visit(tree) {
-		case (CompilationUnit) `<PackageDec? p> <ImportDec* i> <TypeDec* t>` => 
-		case (MethodBody) `{<BlockStm* stms>}` => (MethodBody)`{<BlockStm call> <BlockStm* stms>}`
+	updated = top-down visit(tree) {
+		case (CompilationUnit) `<PackageDec? p> <ImportDec* i> <TypeDec* t>` => (CompilationUnit)`<PackageDec? p> <ImportDec apiImport> <ImportDec* i> <TypeDec* t>`
+		case (ClassDec) `<ClassDecHead head> <ClassBody body>` : { 
+			classLocation = head@\loc; 
+			insert (ClassDec) `<ClassDecHead head> <ClassBody body>`;
+		}
+		case (ConstrDec) `<ConstrHead head> <ConstrBody body>` : {
+			methodLocation = head@\loc;
+			insert (ConstrDec) `<ConstrHead head> <ConstrBody body>`;
+		}
+		case (ConstrBody) `{ <ConstrInv? i> <BlockStm* stms>}` : {
+			BlockStm* s1 = putBeforeEvery(stms, apiCallStatement);
+		 	insert (ConstrBody)`{ <ConstrInv? i> <BlockStm* s1>}`;		// NOTE : Not possible to call anything before super()
+		}
+		case (MethodDec) `<MethodDecHead head> <MethodBody body>` : {
+			methodLocation = head@\loc;
+			insert (MethodDec) `<MethodDecHead head> <MethodBody body>`;
+		}
+		case (MethodBody) `{<BlockStm* stms>}` : {
+			BlockStm methodApiCall = apiCallMethodStatement();
+		 	insert (MethodBody)`{<BlockStm methodApiCall> <BlockStm* stms>}`;
+		}
+		case (Block) `{ <BlockStm* s> }` : {
+			BlockStm* s1 = putBeforeEvery(s, apiCallStatement);
+			insert (Block) `{ <BlockStm* s1> }`;
+		}
 	}
-	x = top-down-break visit(tree) {
-		case (CompilationUnit) `<PackageDec? package> <ImportDec* imports> <TypeDec* types>` => (CompilationUnit)`<PackageDec? package> <ImportDec* imports> <ImportDec api> <TypeDec* types>`
-	}
-	cnt1 = 0;
-	x2 = visit(tree) {
-		case (MethodBody) `{<BlockStm* stms>}` => blockify(putAfterEvery(stms, callStmt, name))
-	}
-}*/
+	writeFile(updateAuthority(file), updated);
+}
 
 void handleFile(loc file){
 	if(contains(file.path, "src/main/java") && contains(file.file, ".java")){ // Source code
-		println(file);
+		instrumentSourceCodeFile(file);
 	} else {
-		str text = readFile(file);
-		writeFile(updateAuthority(file), text);
+		list[int] text = readFileBytes(file);
+		writeFileBytes(updateAuthority(file), text);
 	}
 }
 
 void handleDirectory(loc dir){
 	mkDirectory(updateAuthority(dir));
 	for(f <- dir.ls){
-		handle(f);API_LOCATION
+		handle(f);
 	}
 }
 
@@ -93,17 +130,21 @@ void handle(loc f){
 	}
 }
 
+void importAPI(loc p){
+	loc api = updateAuthority(p);;
+	api.path = api.path + "src/main/java/coverage_api";
+	mkDirectory(api);
+	api.file = api.file + "/CoverageAPI.java";
+	str text = readFile(API_LOCATION);
+	writeFile(api, text);
+}
+
 void createInstrumentedProject(loc p = |project://jpacman-framework|){
 	mkDirectory(updateAuthority(p));
 	for(loc file <- p.ls){
 		handle(file);
 	}
-	loc api = updateAuthority(p);;
-	api.path = api.path + "src/main/java/coverage_api";
-	api.file = api.file + "/CoverageAPI.java";
-	mkDirectory(api);
-	str text = readFile(API);
-	writeFile(updateAuthority(api), text);
+	importAPI(p);
 }
 
 void methodCoverage(loc project) {
@@ -129,6 +170,28 @@ BlockStm* putAfterEvery(BlockStm* stms, BlockStm(loc) f) {
   
   Block put((Block)`{<BlockStm s0> <BlockStm+ stms>}`) 
     = (Block)`{<BlockStm s0> <BlockStm s> <BlockStm* stms2>}`
+    when
+      BlockStm s := f(s0@\loc), 
+      (Block)`{<BlockStm* stms2>}` := put((Block)`{<BlockStm+ stms>}`);
+
+  if ((Block)`{<BlockStm* stms2>}` := put((Block)`{<BlockStm* stms>}`)) {
+    return stms2;
+  }
+}
+
+// Helper function to deal with concrete statement lists
+// second arg should be a closure taking a location (of the element)
+// and producing the BlockStm to-be-inserted 
+BlockStm* putBeforeEvery(BlockStm* stms, BlockStm(loc) f) {
+  
+  Block put(b:(Block)`{}`) = (Block)`{<BlockStm s>}`
+    when BlockStm s := f(b@\loc);
+  
+  Block put((Block)`{<BlockStm s0>}`) = (Block)`{<BlockStm s> <BlockStm s0>}`
+    when BlockStm s := f(s0@\loc);
+  
+  Block put((Block)`{<BlockStm s0> <BlockStm+ stms>}`) 
+    = (Block)`{<BlockStm s> <BlockStm s0> <BlockStm* stms2>}`
     when
       BlockStm s := f(s0@\loc), 
       (Block)`{<BlockStm* stms2>}` := put((Block)`{<BlockStm+ stms>}`);
