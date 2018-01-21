@@ -6,16 +6,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 public class CoverageAPI {
-	private static final File FILE = new File(".coverage_data.csv");
+	private static final File FILE = new File("sqat_coverage/coverage_data.csv");
 	
-	public static void hit(String _class, String _method) {
-		String s = _class + "," + _method + "\n";
-		print(s);
-	}
-	
-	public static void hit(String _class, String _method, String _line) {
-		String s = _class + "," + _method + "," + _line + "\n";
-		print(s);
+	public static void hit(String message) {
+		print(message);
 	}
 	
 	private static void print(String s) {
