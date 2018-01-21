@@ -25,7 +25,6 @@ Checks:
 	- Controlflow statement bodies without opening with curly brace
 	
 Plus: invent your own style violation or code smell and write a checker.
-	- Could we just check for cyclomatic complexity?
 
 Note: since concrete matching in Rascal is "modulo Layout", you cannot
 do checks of layout or comments (or, at least, this will be very hard).
@@ -155,13 +154,8 @@ set[Message] checkElseBranch(loc l){
 		result = result + warningMessage("Control flow statement bodies should open with a curly brace on the same line", l);
 	return result;
 }
-str listToString(list[str] lines){
-	str file = "";
-		for (str line <- lines){
-		file += "\n" + line;
-	}
-	return file;
-}
+
+str listToString(list[str] lines) = ( "" | it + "\n" + line | line <- lines );
 
 Message errorMessage(str msg, loc at) {
 	return error(msg, at);
@@ -173,18 +167,6 @@ Message warningMessage(str msg, loc at){
 
 Message infoMessage(str msg, loc at){
 	return info(msg, at);
-}
-
-Declaration translateIntoDeclaration(str body){
-	loc l = |project://sqat-analysis/src/sqat/series1/A3_CheckStyle.rsc|;		//Required, but not used
-	str s = "public class test {
-			'	public void testMethod() {
-			'		<body>
-			'	}
-			'}";
-	Declaration d = createAstFromString(l, s, true);
-	println(d);
-	return d;
 }
 
 set[Declaration] fileToDeclarationSet(loc file) {

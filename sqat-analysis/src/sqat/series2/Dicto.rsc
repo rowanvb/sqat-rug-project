@@ -28,7 +28,12 @@ syntax Relation
 syntax Entity
   = classOrPackage: {Id "."}+
   | method: {Id "."}+ "::" Id
+  | methodWithParams: {Id "."}+ "::" Id "(" ParameterList ")"
   ;
+
+syntax ParameterList
+	= {Id ","}+ 
+	;
 
 syntax Id =
    id: [$ A-Z _ a-z] !<< ID !>> [$ 0-9 A-Z _ a-z] 
