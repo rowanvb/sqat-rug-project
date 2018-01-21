@@ -59,32 +59,34 @@ Questions
 - how would you test your evaluator of Dicto rules? (sketch a design)
 - come up with 3 rule types that are not currently supported by this version
   of Dicto (and explain why you'd need them). 
+  
+  - option to only select interfaces/classes in packages
+  - package -> all java files in package 
 */
 M3 m3() = createM3FromEclipseProject(|project://jpacman/src|);
  
-void main() {
+set[Message] main() {
 	loc dicto = |project://sqat-analysis/src/sqat/series2/example.dicto|;
-	eval(parse(#start[Dicto], dicto), createM3FromEclipseProject(|project://jpacman/src|));
+	return eval(parse(#start[Dicto], dicto), createM3FromEclipseProject(|project://jpacman/src|));
 }
 
 set[Message] eval(start[Dicto] dicto, M3 m3) = eval(dicto.top, m3);
 
-set[Message] eval((Dicto)`<Rule* rules>`, M3 m3) 
-  = ( {} | it + eval(r, m3) | r <- rules );
+set[Message] eval((Dicto)`<Rule* rules>`, M3 m3) = ( {} | it + eval(r, m3) | r <- rules );
   
 set[Message] eval(Rule rule, M3 m3) {
-  	set[Message] msgs = {};
-  	switch(rule) {
-	 	case (Rule) `<Entity e1> <Modality m> import <Entity e2>` : (validateImports(e1, m, e2, m3));
-	 	//case (Rule) `<Entity e1> <Modality m> depend <Entity e2>` : println(getDepends(e1, m3));
-	 	//case (Rule) `<Entity e1> <Modality m> invoke <Entity e2>` : println("invoke");
-	 	//case (Rule) `<Entity e1> <Modality m> instantiate <Entity e2>` : println(validateDepends(e1, m, e2, m3));	
-	  	//case (Rule) `<Entity e1> <Modality m> inherit <Entity e2>` : println(validateExtends(e1, m, e2, m3));
+    bool isValid = false;
+    if ((Rule)`<Entity e1> <Modality m> <Relation r> <Entity e2>` := rule) {
+		switch(r) {
+			case (Relation)`import` 		: isValid = validateImports(e1, m, e2, m3);
+			case (Relation)`depend` 		: isValid = validateDepends(e1, m, e2, m3);
+			case (Relation)`invoke` 		: isValid = validateInvoke(e1, m, e2, m3);
+			case (Relation)`instantiate` 	: isValid = validateInstantiation(e1, m, e2, m3);	
+			case (Relation)`inherit` 		: isValid = validateExtends(e1, m, e2, m3);
+		}
+		return ( {} | it + warning("<rule> is invalid!", location) | location <- entityToLoc(e1, m3), !isValid );
 	}
- 	
-  // to be done
-  
-  return msgs;
+	return { warning("<rule> is of a wrong format", rule@\loc) };
 }
 
 bool validateDepends(Entity e1, Modality m, Entity e2, M3 m3) 
@@ -95,6 +97,12 @@ bool validateExtends(Entity e1, Modality m, Entity e2, M3 m3)
 
 bool validateImports(Entity e1, Modality m, Entity e2, M3 m3) 
 	= all(l <- entityToLoc(e1, m3), validate(entityToLoc(e2, m3), m, getImports(l, m3)));
+	
+bool validateInvoke(Entity e1, Modality m, Entity e2, M3 m3)
+	= all(l <- entityToLoc(e1, m3), validate(entityToLoc(e2, m3), m, getInvocations(l, m3)));
+	
+bool validateInstantiation(Entity e1, Modality m, Entity e2, M3 m3)
+	= all(l <- entityToLoc(e1, m3), validate(entityToLoc(e2, m3), m, getInstantiations(l, m3)));
 
 bool validate(set[loc] locations1, Modality modality, set[loc] locations2) 
 	= all(l <- locations1, validate(l, modality, locations2));
@@ -110,8 +118,20 @@ bool validate(loc location, Modality modality, set[loc] locations) {
 }
 
 set[loc] getExtends(loc l, M3 m3) = m3.extends[l];
+
 set[loc] getDepends(loc l, M3 m3) = m3.typeDependency[l];
+
 set[loc] getImports(loc l, M3 m3) = getFileImports(getUriFromLoc(l, m3), m3);
+
+set[loc] getInvocations(loc l, M3 m3){
+	if (isClass(l)) {
+		return ( {} | it + theMethod | loc theMethod <- m3.methodInvocation[methods(m3, l)] ); 
+	}
+	return m3.methodInvocation[l];
+}
+
+set[loc] getInstantiations(loc l, M3 m3) 
+	= ( {} | it + constructor | constructor <- getInvocations(l, m3), isConstructor(constructor));
 
 set[loc] getFileImports(loc l, M3 m3) {
 	list[str] lines;
