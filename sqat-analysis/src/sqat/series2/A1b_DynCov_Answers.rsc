@@ -1,8 +1,10 @@
-module sqat::series2::A1b_DynCov
+module sqat::series2::A1b_DynCov_Answers
 
-import Java17ish;
-import ParseTree;
-import util::FileSystem;
+import sqat::series2::A1b_DynCov_Coverage;
+import Set;
+import String;
+import IO;
+import util::Math;
 
 /*
 
@@ -23,9 +25,12 @@ coverage information through the insert calls to your little API.
 
 Questions
 - use a third-party coverage tool (e.g. Clover) to compare your results to (explain differences)
+		- Very close
+		- Overrides not completely working
 - which methods have full line coverage?
 - which methods are not covered at all, and why does it matter (if so)?
 - what are the drawbacks of source-based instrumentation?
+		- Running source-base instrumentation requires a working installation of the software. 
 
 Tips:
 - create a shadow JPacman project (e.g. jpacman-instrumented) to write out the transformed source files.
@@ -43,37 +48,39 @@ Tips:
 
 */
 
-
-void methodCoverage(loc project) {
-  // to be done
+void printCoverage(){
+	rel[loc method, loc line, bool covered] lines = lineCoverage();
+	int lineCount = size(lines);
+	rel[loc method, loc line, bool covered] coveredLines = { l | l <- lines, l.covered };
+	int coveredLineCount = size(coveredLines);
+	real lineCoverage = toReal(coveredLineCount) / lineCount * 100.0;
+	println("Line coverage : <lineCoverage>");
+	
+	rel[loc method, bool covered] methods = methodCoverage();
+	int methodCount = size(methods);
+	rel[loc method, bool covered] coveredMethods = { m | m <- methods, m.covered };
+	int coveredMethodCount = size(coveredMethods);
+	real methodCoverage = toReal(coveredMethodCount) / methodCount * 100.0;
+	println("Method coverage : <methodCoverage>");
 }
 
-void lineCoverage(loc project) {
-  // to be done
+set[loc method] notCoveredMethods(){
+ 	rel[loc method, bool covered] methods = methodCoverage();
+ 	set[loc method] notCoveredMethods = { m.method | m <- methods, !m.covered };
+ 	return notCoveredMethods;
 }
 
-
-
-// Helper function to deal with concrete statement lists
-// second arg should be a closure taking a location (of the element)
-// and producing the BlockStm to-be-inserted 
-BlockStm* putAfterEvery(BlockStm* stms, BlockStm(loc) f) {
-  
-  Block put(b:(Block)`{}`) = (Block)`{<BlockStm s>}`
-    when BlockStm s := f(b@\loc);
-  
-  Block put((Block)`{<BlockStm s0>}`) = (Block)`{<BlockStm s0> <BlockStm s>}`
-    when BlockStm s := f(s0@\loc);
-  
-  Block put((Block)`{<BlockStm s0> <BlockStm+ stms>}`) 
-    = (Block)`{<BlockStm s0> <BlockStm s> <BlockStm* stms2>}`
-    when
-      BlockStm s := f(s0@\loc), 
-      (Block)`{<BlockStm* stms2>}` := put((Block)`{<BlockStm+ stms>}`);
-
-  if ((Block)`{<BlockStm* stms2>}` := put((Block)`{<BlockStm* stms>}`)) {
-    return stms2;
-  }
+set[loc method] fullyCoveredMethods(){
+ 	rel[loc method, loc line, bool covered] lines = lineCoverage();
+ 	set[loc] methods = lines.method;
+ 	set[loc] fullyCoveredMethods = {}; 
+ 	for(loc method <- methods){
+ 		rel[loc method, loc line, bool covered] allLinesOfMethod = { line | tuple[loc m, loc l, bool c] line <- lines, line.m == method};
+ 		rel[loc method, loc line, bool covered] allCoveredLinesOfMethod = { line | tuple[loc m, loc l, bool covered] line <- allLinesOfMethod, line.covered};
+ 		if(size(allLinesOfMethod) == size(allCoveredLinesOfMethod)){
+ 			fullyCoveredMethods += method;
+ 		}
+ 	}
+ 	return fullyCoveredMethods;
 }
-
 
