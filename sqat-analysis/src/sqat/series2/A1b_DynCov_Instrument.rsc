@@ -164,7 +164,7 @@ void writeLinesToCSV(loc p){
 	writeCSV(lines, lineFile);
 }
 
-void createInstrumentedProject(loc p = |project://jpacman-framework|){
+void instrumentProject(loc p = |project://jpacman-framework|){
 	mkDirectory(updateAuthority(p));
 	loc coverageFolder = updateAuthority(p);
 	coverageFolder.path = "sqat_coverage";
