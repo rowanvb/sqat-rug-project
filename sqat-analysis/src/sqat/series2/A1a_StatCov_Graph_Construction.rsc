@@ -57,7 +57,6 @@ rel[loc name, loc src] getAllNonTestClassesInModel(M3 model){
 }
 
 Graph graphTransitiveClosure(Graph gr){
-	println("Node count : <size(gr)>");
 	solve(gr){
 		for(tuple[Node from, Label l, Node to] n <- gr){
 			gr += { <n.from, n.l, reachable.to> | tuple[Node from, Label l, Node to] reachable <- gr, 
@@ -66,7 +65,6 @@ Graph graphTransitiveClosure(Graph gr){
 																			n.l == reachable.l};
 		}
 	}
-	println("Node count : <size(gr)>");
 	return gr;
 }
 

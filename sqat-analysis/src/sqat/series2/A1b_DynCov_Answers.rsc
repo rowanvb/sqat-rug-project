@@ -1,6 +1,9 @@
 module sqat::series2::A1b_DynCov_Answers
 
 import sqat::series2::A1b_DynCov_Coverage;
+
+import Message;
+import util::ResourceMarkers;
 import Set;
 import String;
 import IO;
@@ -64,13 +67,19 @@ void printCoverage(){
 	println("Method coverage : <methodCoverage>");
 }
 
-set[loc method] notCoveredMethods(){
+set[loc] notCoveredMethods(){
  	rel[loc method, bool covered] methods = methodCoverage();
- 	set[loc method] notCoveredMethods = { m.method | m <- methods, !m.covered };
+ 	set[loc] notCoveredMethods = { m.method | m <- methods, !m.covered };
  	return notCoveredMethods;
 }
 
-set[loc method] fullyCoveredMethods(){
+set[loc] notCoveredLines(){
+ 	rel[loc method, loc line, bool covered] lines = lineCoverage();
+ 	set[loc] notCoveredLines = { l.line | l <- lines, !l.covered };
+ 	return notCoveredLines;
+}
+
+set[loc] fullyCoveredMethods(){
  	rel[loc method, loc line, bool covered] lines = lineCoverage();
  	set[loc] methods = lines.method;
  	set[loc] fullyCoveredMethods = {}; 
@@ -82,5 +91,14 @@ set[loc method] fullyCoveredMethods(){
  		}
  	}
  	return fullyCoveredMethods;
+}
+
+void generateWarnings(){
+	set[Message] messages = {};
+	for(loc method <- notCoveredMethods())
+		messages += warning("Method not covered", method);
+	for(loc line <- notCoveredLines())
+		messages += warning("Line not covered", line);
+	addMessageMarkers(messages);
 }
 

@@ -181,9 +181,7 @@ void writeLinesToCSV(loc p){
 
 void instrumentProject(loc p = |project://jpacman-framework|){
 	mkDirectory(updateAuthority(p));
-	println("Test");
 	mkDirectory(coverageFolder(p));
-	println("Test");
 	for(loc file <- p.ls){
 		handle(file);
 	}

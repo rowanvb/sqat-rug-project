@@ -5,6 +5,9 @@ import lang::java::jdt::m3::Core;
 import sqat::series2::A1a_StatCov_Coverage_Computation;
 import sqat::series2::A1a_StatCov_Graph_Construction;
 
+import Message;
+import util::ResourceMarkers;
+import Message;
 import Set;
 import String;
 import IO;
@@ -64,6 +67,7 @@ set[loc] notCoveredMethods(){
 	map[loc method, bool covered] coveredMethods = determineCoveredMethods(model);
 	return { m | m <- coveredMethods, !coveredMethods[m] };
 }
+
 
 void printCoverageInformation(){
 	tuple[MethodCoverage mc, PackageCoverage pc, ClassCoverage cc] stats = computeCoverageStatisticsForProject();
