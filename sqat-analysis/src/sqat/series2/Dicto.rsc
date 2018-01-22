@@ -32,7 +32,7 @@ syntax Entity
   ;
 
 syntax ParameterList
-	= {Id ","}+ 
+	= {{Id "."}+ ","}+ 
 	;
 
 syntax Id =

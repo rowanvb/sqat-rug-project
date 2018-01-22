@@ -1,4 +1,12 @@
-nl.tudelft.jpacman.game.SinglePlayerGame cannot depend nl.tudelft.jpacman.game.Game
-nl.tudelft.jpacman.game.SinglePlayerGame::getPlayers cannot instantiate nl.tudelft.jpacman.level.Player
-nl.tudelft.jpacman.level.CollisionInteractionMap::collide(C1,C2) cannot instantiate nl.tudelft.jpacman.level.Player
-nl.tudelft.jpacman.game.SinglePlayerGame cannot import nl.tudelft.jpacman.level
+nl.tudelft.jpacman.game.Game cannot depend nl.tudelft.jpacman.game.SinglePlayerGame
+nl.tudelft.jpacman.game.SinglePlayerGame canonly inherit nl.tudelft.jpacman.game.Game
+
+nl.tudelft.jpacman.game.GameFactory must instantiate nl.tudelft.jpacman.game.SinglePlayerGame
+nl.tudelft.jpacman.level.LevelFactory must instantiate nl.tudelft.jpacman.level.Level
+nl.tudelft.jpacman.board.BoardFactory canonly instantiate nl.tudelft.jpacman.board.Board
+
+nl.tudelft.jpacman.game cannot depend nl.tudelft.jpacman.ui
+nl.tudelft.jpacman.board cannot depend nl.tudelft.jpacman.ui
+nl.tudelft.jpacman.level cannot depend nl.tudelft.jpacman.ui
+nl.tudelft.jpacman.npc cannot depend nl.tudelft.jpacman.ui
+nl.tudelft.jpacman.ui.BoardPanel::render(nl.tudelft.jpacman.board.Square,java.awt.Graphics,int,int,int,int) must invoke nl.tudelft.jpacman.sprite.Sprite::draw(java.awt.Graphics,int,int,int,int)
