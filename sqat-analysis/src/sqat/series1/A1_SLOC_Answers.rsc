@@ -2,9 +2,7 @@ module sqat::series1::A1_SLOC_Answers
 
 import sqat::series1::A1_SLOC;
 import IO;
-import ParseTree;
 import String;
-import util::FileSystem;
 import util::Math;
 /* 
 
@@ -52,7 +50,7 @@ loc getLargestFile(loc location){
 		}
 	}
 	return max;
-}	  
+}
 
 void compareLocationSizes(loc loc1, loc loc2){
 	int size1 = countTotalSize(loc1);

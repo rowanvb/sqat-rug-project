@@ -10,50 +10,6 @@ import util::ResourceMarkers;
 import String;
 import Set;
 
-
-/*
-
-Assignment: detect style violations in Java source code.
-Select 3 checks out of this list:  http://checkstyle.sourceforge.net/checks.html
-Compute a set[Message] (see module Message) containing 
-check-style-warnings + location of  the offending source fragment. 
-
-Checks:
-	- MethodNaming
-	- LineLength (100)
-	- StarImport
-	- Controlflow statement bodies without opening with curly brace
-	
-Plus: invent your own style violation or code smell and write a checker.
-
-Note: since concrete matching in Rascal is "modulo Layout", you cannot
-do checks of layout or comments (or, at least, this will be very hard).
-
-JPacman has a list of enabled checks in checkstyle.xml.
-If you're checking for those, introduce them first to see your implementation
-finds them.
-
-Questions
-- for each violation: look at the code and describe what is going on? 
-  Is it a "valid" violation, or a false positive?
-
-Tips 
-
-- use the grammar in lang::java::\syntax::Java15 to parse source files
-  (using parse(#start[CompilationUnit], aLoc), in ParseTree)
-  now you can use concrete syntax matching (as in Series 0)
-
-- alternatively: some checks can be based on the M3 ASTs.
-
-- use the functionality defined in util::ResourceMarkers to decorate Java 
-  source editors with line decorations to indicate the smell/style violation
-  (e.g., addMessageMarkers(set[Message]))
-
-Bonus:
-- write simple "refactorings" to fix one or more classes of violations 
-
-*/
-
 set[Message] checkStyle(loc project, int maxLineLength = 100) {
   	set[Message] result = {};
 	set[Declaration] AST = createAstsFromEclipseProject(project, true);   	
@@ -72,18 +28,18 @@ set[Message] createControlFlowMessages(set[Declaration] declarations) {
 	set[loc] statements = {};
 	set[loc] elseStatements = {};
 	top-down visit (declarations) {    
-		case \while(_, Statement body) : statements = statements +  body.src;
-		case \for(_, _, _, Statement body) : statements = statements + body.src;
-		case \for(_, _, Statement body) : statements = statements + body.src;
-		case \foreach(_, _, Statement body) : statements = statements + body.src;
+		case \while(_, Statement body) : 			statements = statements +  body.src;
+		case \for(_, _, _, Statement body) : 		statements = statements + body.src;
+		case \for(_, _, Statement body) : 			statements = statements + body.src;
+		case \foreach(_, _, Statement body) : 		statements = statements + body.src;
+		case \try (Statement body, _) : 				statements = statements + body.src;
+		case \try (Statement body, _, _) : 			statements = statements + body.src;
+		case \catch (_, Statement body) : 			statements + statements + body.src;	
+		case \if (_, Statement body) : 				statements = statements + body.src;
 		case \if (_, Statement body, Statement e) : { 
 			statements = statements + body.src;
 			elseStatements = elseStatements + e.src; 
 		}
-		case \if (_, Statement body) : statements = statements + body.src;
-		case \try (Statement body, _) : statements = statements + body.src;
-		case \try (Statement body, _, _) : statements = statements + body.src;
-		case \catch (_, Statement body) : statements + statements + body.src;	
 	} 
 	for (loc l <- statements) {
 		result = result + checkControlFlow(l);
@@ -98,8 +54,8 @@ set[Message] createMethodNamingMessages(set[Declaration] declarations) {
 	set[Message] result = {};
 	map[loc l, str s] methods = ();
   	top-down visit (declarations) {
-    	case theMethod: \method(_, str name, _, _, _) : methods[theMethod.src] = name;
-    	case theMethod: \method(_, str name, _, _) : methods[theMethod.src] = name;       
+   	 	case theMethod: \method(_, str name, _, _, _) : 	methods[theMethod.src] = name;
+    		case theMethod: \method(_, str name, _, _) : 	methods[theMethod.src] = name;       
 	}
 	map[loc, str] wrong = wrongMethodNaming(methods);
 	for (loc l <- wrong) {
@@ -140,9 +96,8 @@ set[Message] checkControlFlow(loc l) {
 	list[str] lines = readFileLines(l);
 	str file = listToString(lines);
 	set[Message] result = {};
-	if (!(/^\{[\W\w]*\}$/m := file)) {
+	if (!(/^\{[\W\w]*\}$/m := file))
 		result = result + warningMessage("Control flow statement bodies should open with a curly brace on the same line", l);
-	}
 	return result;
 }
 
@@ -172,6 +127,8 @@ Message infoMessage(str msg, loc at){
 set[Declaration] fileToDeclarationSet(loc file) {
 	return {} + createAstFromFile(file, true);
 }
+
+// =================== TESTS ======================
 
 test bool correctStatement() {
 	set[Declaration] s = fileToDeclarationSet(|project://sqat-analysis/src/sqat/testfiles/CheckStyleInput_1.java|);

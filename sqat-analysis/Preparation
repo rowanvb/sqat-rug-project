@@ -1,6 +1,24 @@
+General:
+	o When discussing the code, focus on the most import parts
+	o Don't discuss how the Answer methods work
+	- Remove unnecessary imports
+	- Should we remove the exercise explanation?
+	- Remove SmokeTests
 
+Series 1
+SLOC:
+	o 
 
-A1a:
+MCCABE:
+	o Tests display what we do not consider for the McCabe index
+	
+CHECKSTYLE:
+
+STATIC_COV:
 	- Generate clover report
-			1. Open java views
-			2. Run clover as junit tests
+	
+DYNAMIC_COV:
+
+
+DICTO:
+

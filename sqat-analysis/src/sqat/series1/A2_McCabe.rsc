@@ -6,7 +6,7 @@ import String;
 import util::FileSystem;
 import IO;
 
-alias CycComp = rel[loc method, int complexity];					// When a map is used only string representation of location is stored
+alias CycComp = rel[loc method, int complexity];	
 alias CycCompDistribution = map[int complexity, int frequency];
 
 CycComp McCabe(loc location){
@@ -15,7 +15,7 @@ CycComp McCabe(loc location){
 	
 	CycComp complexity ={};
 	
-	top-down visit(declarations)	{
+	top-down-break visit(declarations)	{
 		case statement : \method(Type \return, str n, list[Declaration] p, list[Expression] e, Statement impl) : complexity[statement.src] = computeMethodComplexity(impl);
 	}
 	

@@ -8,7 +8,6 @@ import util::FileSystem;
 import util::Math;
 import lang::csv::IO;
 
-
 loc API_LOCATION = |project://sqat-analysis/src/sqat/series2/coverage_api/CoverageAPI.java|;
 ImportDec apiImport = (ImportDec)`import coverage_api.CoverageAPI;`;
 
@@ -18,6 +17,7 @@ int methodIndex = 0;
 int lineIndex = 0;
 rel[str hitString, loc class, loc method] methods = { };
 rel[str hitString, loc class, loc method, loc line] lines = { };
+
 
 // Helper function to deal with concrete statement lists
 // second arg should be a closure taking a location (of the element)
@@ -41,9 +41,28 @@ BlockStm* putBeforeEvery(BlockStm* stms, BlockStm(loc) f) {
   }
 }
 
-loc updateAuthority(loc project){
-	project.authority = project.authority + "-instrumented";
-	return project;
+loc updateAuthority(loc project) {
+	return project.authority += "-instrumented";
+}
+
+loc coverageFolder(loc project){
+	loc updated = updateAuthority(project);
+	return updated.path += "sqat_coverage";
+}
+
+loc methodInfoFile(loc project){
+	loc updated = coverageFolder(project);
+	return updated.file += "/defined_methods.csv";
+}
+
+loc lineInfoFile(loc project){
+	loc updated = coverageFolder(project);
+	return updated.file += "/defined_lines.csv";
+}
+
+loc hitInfoFile(loc project){
+	loc updated = coverageFolder(project);
+	return updated.file += "/coverage_data.csv";
 }
 
 BlockStm apiCallMethodStatement(){
@@ -153,31 +172,36 @@ void importAPI(loc p){
 }
 
 void writeMethodsToCSV(loc p){
-	loc metFile = p;
-	metFile.file += "/defined_methods.csv";
-	writeCSV(methods, metFile);
+	writeCSV(methods, methodInfoFile(p));
 }
 
 void writeLinesToCSV(loc p){
-	loc lineFile = p;
-	lineFile.file += "/defined_lines.csv";
-	writeCSV(lines, lineFile);
+	writeCSV(lines, lineInfoFile(p));
 }
 
 void instrumentProject(loc p = |project://jpacman-framework|){
 	mkDirectory(updateAuthority(p));
-	loc coverageFolder = updateAuthority(p);
-	coverageFolder.path = "sqat_coverage";
-	mkDirectory(coverageFolder);
+	println("Test");
+	mkDirectory(coverageFolder(p));
+	println("Test");
 	for(loc file <- p.ls){
 		handle(file);
 	}
 	importAPI(p);
-	writeMethodsToCSV(coverageFolder);
-	writeLinesToCSV(coverageFolder);
+	writeMethodsToCSV(p);
+	writeLinesToCSV(p);
+}
+rel[str hitString, loc class, loc method, loc line] readLinesFromCSV(loc p){
+	return readCSV(#rel[str hitString, loc class, loc method, loc line],  lineInfoFile(p));
 }
 
+rel[str hitString, loc class, loc method] readMethodsFromCSV(loc p){
+	return readCSV(#rel[str hitString, loc class, loc method],  methodInfoFile(p));
+}
 
-
+list[str] readHitInfoFromCSV(loc p){
+	str allHits = readFile(hitInfoFile(p));
+	return split(",", allHits);
+}
 
 
